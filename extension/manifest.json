@@ -13,13 +13,10 @@
     "debugger",
     "tabs",
     "storage",
-    "activeTab",
-    "scripting"
+    "activeTab"
   ],
   "host_permissions": [
-    "http://127.0.0.1/*",
-    "https://*/*",
-    "http://*/*"
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js",

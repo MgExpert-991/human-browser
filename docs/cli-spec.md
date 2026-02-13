@@ -11,8 +11,10 @@
 
 ## Commands
 
-- `human-browser init [--host 127.0.0.1] [--port 18765] [--max-events 500] [--force]`
+- `human-browser init [--host 127.0.0.1] [--port 18765] [--max-events 500] [--force] [--show-token]`
   - creates config with shared token
+- `human-browser ws [--show-token]`
+  - prints websocket endpoint (`token` is hidden unless `--show-token` is specified)
 - `human-browser daemon`
   - starts local daemon
 - `human-browser status`

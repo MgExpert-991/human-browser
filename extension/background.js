@@ -1,5 +1,8 @@
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 30000;
+const DAEMON_ALLOWED_PROTOCOL = 'ws:';
+const DAEMON_ALLOWED_HOST = '127.0.0.1';
+const DAEMON_ALLOWED_PATH = '/bridge';
 
 const ACTION_ICON_PATHS = {
   connected: {
@@ -79,7 +82,13 @@ const SNAPSHOT_SCRIPT = `(input) => {
     }
 
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      if (el.value && el.value.trim()) return el.value.trim();
+      // Never include live form values in snapshots.
+      // Snapshot output is often copied into logs or issue reports, so reading
+      // typed values here would directly leak credentials and personal data.
+      if (el instanceof HTMLInputElement) {
+        const type = (el.getAttribute('type') || 'text').toLowerCase();
+        if (type === 'password') return '';
+      }
       if (el.placeholder && el.placeholder.trim()) return el.placeholder.trim();
     }
 
@@ -251,7 +260,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       if (message?.type === 'SAVE_CONFIG') {
-        const daemonWsUrl = String(message.daemonWsUrl ?? '').trim();
+        const daemonWsUrl = normalizeDaemonWsUrl(String(message.daemonWsUrl ?? '').trim());
         const token = String(message.token ?? '').trim();
         await chrome.storage.local.set({ daemonWsUrl, daemonToken: token });
         state.daemon.wsUrl = daemonWsUrl;
@@ -291,7 +300,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function bootstrap() {
   const stored = await chrome.storage.local.get(['daemonWsUrl', 'daemonToken']);
-  state.daemon.wsUrl = String(stored.daemonWsUrl ?? '');
+  const rawWsUrl = String(stored.daemonWsUrl ?? '').trim();
+  if (rawWsUrl) {
+    try {
+      state.daemon.wsUrl = normalizeDaemonWsUrl(rawWsUrl);
+    } catch (error) {
+      state.daemon.wsUrl = '';
+      setError(error instanceof Error ? error.message : String(error));
+    }
+  } else {
+    state.daemon.wsUrl = '';
+  }
   state.daemon.token = String(stored.daemonToken ?? '');
   updateActionIcon();
   connectSocket();
@@ -361,6 +380,36 @@ function connectSocket(options = { force: false }) {
     state.daemon.lastDisconnectReason = event.reason || `close_code_${event.code}`;
     scheduleReconnect();
   };
+}
+
+function normalizeDaemonWsUrl(raw) {
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('Daemon WS URL must be a valid URL (example: ws://127.0.0.1:18765/bridge)');
+  }
+
+  // Restrict bridge destination to local loopback only.
+  // Without this, a typo or malicious setup guide could point the extension to
+  // a remote server that issues browser-control commands.
+  if (parsed.protocol !== DAEMON_ALLOWED_PROTOCOL) {
+    throw new Error('Daemon WS URL must use ws://');
+  }
+
+  if (parsed.hostname !== DAEMON_ALLOWED_HOST) {
+    throw new Error(`Daemon WS URL host must be ${DAEMON_ALLOWED_HOST}`);
+  }
+
+  if (parsed.pathname !== DAEMON_ALLOWED_PATH) {
+    throw new Error(`Daemon WS URL path must be ${DAEMON_ALLOWED_PATH}`);
+  }
+
+  if (parsed.search || parsed.hash || parsed.username || parsed.password) {
+    throw new Error('Daemon WS URL must not include query/hash/auth components');
+  }
+
+  return `ws://${DAEMON_ALLOWED_HOST}${parsed.port ? `:${parsed.port}` : ''}${DAEMON_ALLOWED_PATH}`;
 }
 
 function scheduleReconnect() {

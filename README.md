@@ -22,7 +22,7 @@ human-browser daemon
 `init` 後に表示される以下を拡張popupに設定:
 
 - `extension_ws_url` 例: `ws://127.0.0.1:18765/bridge`
-- `token`
+- `token` (`init` はデフォルトで token を隠すため、`human-browser init --show-token` で表示)
 
 ## Chrome拡張の読み込み
 
@@ -43,6 +43,8 @@ human-browser fill '#email' hello@example.com
 human-browser click @e1 --snapshot <snapshot_id>
 human-browser fill @e2 hello@example.com --snapshot <snapshot_id>
 human-browser diagnose --limit 20
+# token を表示する場合のみ明示フラグを使う
+human-browser ws --show-token
 ```
 
 ## 仕様

@@ -13,6 +13,11 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "files": [
+    "src",
+    "vendor/agent-browser",
+    "README.md"
+  ],
   "dependencies": {
     "jsdom": "^28.0.0",
     "ws": "^8.19.0"

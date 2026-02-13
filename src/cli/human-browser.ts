@@ -95,7 +95,7 @@ async function main(): Promise<void> {
       return;
     }
     case 'ws': {
-      await commandWs(parsed.options);
+      await commandWs(parsed.args, parsed.options);
       return;
     }
     case 'init': {
@@ -117,6 +117,7 @@ async function commandInit(args: string[], options: GlobalOptions): Promise<void
   let port = 18765;
   let maxEvents = 500;
   let force = false;
+  let showToken = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const token = args[i];
@@ -164,6 +165,12 @@ async function commandInit(args: string[], options: GlobalOptions): Promise<void
       continue;
     }
 
+    if (token === '--show-token') {
+      // Security default: never print secrets unless user explicitly opts in.
+      showToken = true;
+      continue;
+    }
+
     throw new HBError('BAD_REQUEST', `Unknown init option: ${token}`);
   }
 
@@ -180,7 +187,8 @@ async function commandInit(args: string[], options: GlobalOptions): Promise<void
     replaced_existing: alreadyExisted,
     daemon_http_url: `http://${config.daemon.host}:${config.daemon.port}`,
     extension_ws_url: `ws://${config.daemon.host}:${config.daemon.port}/bridge`,
-    token: config.auth.token,
+    token: showToken ? config.auth.token : '[hidden]',
+    token_hidden: !showToken,
   };
 
   if (options.json) {
@@ -192,6 +200,9 @@ async function commandInit(args: string[], options: GlobalOptions): Promise<void
   process.stdout.write(`daemon_http_url: ${output.daemon_http_url}\n`);
   process.stdout.write(`extension_ws_url: ${output.extension_ws_url}\n`);
   process.stdout.write(`token: ${output.token}\n`);
+  if (output.token_hidden) {
+    process.stdout.write('hint: use `human-browser init --show-token` to print token\n');
+  }
 }
 
 async function commandDaemon(options: GlobalOptions): Promise<void> {
@@ -221,11 +232,23 @@ async function commandDaemon(options: GlobalOptions): Promise<void> {
   });
 }
 
-async function commandWs(options: GlobalOptions): Promise<void> {
+async function commandWs(args: string[], options: GlobalOptions): Promise<void> {
+  let showToken = false;
+
+  for (const token of args) {
+    if (token === '--show-token') {
+      // Security default: avoid accidental token leaks in shell history / pasted logs.
+      showToken = true;
+      continue;
+    }
+    throw new HBError('BAD_REQUEST', `Unknown ws option: ${token}`);
+  }
+
   const config = await readConfig(options.configPath);
   const data = {
     ws_url: `ws://${config.daemon.host}:${config.daemon.port}/bridge`,
-    token: config.auth.token,
+    token: showToken ? config.auth.token : '[hidden]',
+    token_hidden: !showToken,
   };
 
   if (options.json) {
@@ -235,6 +258,9 @@ async function commandWs(options: GlobalOptions): Promise<void> {
 
   process.stdout.write(`ws_url: ${data.ws_url}\n`);
   process.stdout.write(`token: ${data.token}\n`);
+  if (data.token_hidden) {
+    process.stdout.write('hint: use `human-browser ws --show-token` to print token\n');
+  }
 }
 
 async function commandDaemonRpc(command: string, args: string[], options: GlobalOptions): Promise<void> {
@@ -523,8 +549,8 @@ function printHelp(): void {
       '  human-browser [--json] [--config <path>] [--timeout <ms>] [--queue-mode hold|fail] <command> [args]',
       '',
       'Commands:',
-      '  ws',
-      '  init [--host 127.0.0.1] [--port 18765] [--max-events 500] [--force]',
+      '  ws [--show-token]',
+      '  init [--host 127.0.0.1] [--port 18765] [--max-events 500] [--force] [--show-token]',
       '  daemon',
       '  status',
       '  tabs',

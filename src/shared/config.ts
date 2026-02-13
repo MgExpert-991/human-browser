@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -6,6 +6,7 @@ import { HBError } from './errors.ts';
 import type { DaemonConfig } from './types.ts';
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), '.human-browser', 'config.json');
+const LOOPBACK_HOST = '127.0.0.1';
 
 export function resolveConfigPath(configPath?: string): string {
   return configPath ?? DEFAULT_CONFIG_PATH;
@@ -37,6 +38,17 @@ export async function readConfig(configPath?: string): Promise<DaemonConfig> {
   return parsed;
 }
 
+function assertLoopbackHost(host: string, path: string): void {
+  // The daemon is intentionally local-only. Enforcing loopback here prevents
+  // accidental exposure to LAN/WAN when users edit config by hand.
+  if (host !== LOOPBACK_HOST) {
+    throw new HBError('BAD_REQUEST', `Config.daemon.host must be ${LOOPBACK_HOST}`, {
+      config_path: path,
+      host,
+    });
+  }
+}
+
 function validateConfig(input: unknown, path: string): asserts input is DaemonConfig {
   if (!input || typeof input !== 'object') {
     throw new HBError('BAD_REQUEST', 'Config must be an object', { config_path: path });
@@ -52,6 +64,7 @@ function validateConfig(input: unknown, path: string): asserts input is DaemonCo
       config_path: path,
     });
   }
+  assertLoopbackHost(daemon.host, path);
 
   if (!auth || typeof auth.token !== 'string' || auth.token.length < 24) {
     throw new HBError('BAD_REQUEST', 'Config.auth.token is required and must be at least 24 characters', {
@@ -74,6 +87,11 @@ export async function initConfig(options: {
   force: boolean;
 }): Promise<{ path: string; config: DaemonConfig; alreadyExisted: boolean }> {
   const resolved = resolveConfigPath(options.configPath);
+  if (options.host !== LOOPBACK_HOST) {
+    throw new HBError('BAD_REQUEST', `--host must be ${LOOPBACK_HOST}`, {
+      host: options.host,
+    });
+  }
 
   let exists = false;
   try {
@@ -103,7 +121,10 @@ export async function initConfig(options: {
   };
 
   await mkdir(dirname(resolved), { recursive: true });
-  await writeFile(resolved, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  // The token inside config is a secret shared with the extension.
+  // Keep file permissions strict even if the file already existed.
+  await writeFile(resolved, `${JSON.stringify(config, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await chmod(resolved, 0o600);
 
   return {
     path: resolved,
