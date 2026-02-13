@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
+import { realpathSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { initConfig, readConfig } from '../shared/config.ts';
 import { HBError, asStructuredError } from '../shared/errors.ts';
-import type { DaemonApiResponse, DaemonConfig, StructuredError } from '../shared/types.ts';
+import type { DaemonApiResponse, DaemonConfig, SnapshotOptions, StructuredError } from '../shared/types.ts';
 import { startDaemon } from '../daemon/app.ts';
 
 interface GlobalOptions {
@@ -276,7 +278,7 @@ async function commandDaemonRpc(command: string, args: string[], options: Global
   renderText(command, data);
 }
 
-function toDaemonRequest(
+export function toDaemonRequest(
   command: string,
   args: string[],
 ): {
@@ -303,12 +305,12 @@ function toDaemonRequest(
       };
     }
     case 'snapshot': {
-      const parsed = parseNamedFlags(args, ['--tab']);
-      const tab = parsed['--tab'];
+      const parsed = parseSnapshotArgs(args);
       return {
         command,
         args: {
-          target: tab === undefined ? undefined : parseTab(tab),
+          target: parsed.target,
+          ...parsed.options,
         },
       };
     }
@@ -459,6 +461,68 @@ function parseNamedFlags(args: string[], allowedFlags: string[]): Record<string,
   return map;
 }
 
+function parseSnapshotArgs(args: string[]): { target?: number | 'active'; options: SnapshotOptions } {
+  const options: SnapshotOptions = {};
+  let target: number | 'active' | undefined;
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+
+    if (token === '--interactive') {
+      options.interactive = true;
+      continue;
+    }
+
+    if (token === '--cursor') {
+      options.cursor = true;
+      continue;
+    }
+
+    if (token === '--compact') {
+      options.compact = true;
+      continue;
+    }
+
+    if (token === '--tab') {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        throw new HBError('BAD_REQUEST', 'Flag requires a value: --tab');
+      }
+      target = parseTab(value);
+      i += 1;
+      continue;
+    }
+
+    if (token === '--depth') {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        throw new HBError('BAD_REQUEST', 'Flag requires a value: --depth');
+      }
+      const depth = Number(value);
+      if (!Number.isInteger(depth) || depth < 0) {
+        throw new HBError('BAD_REQUEST', '--depth must be a non-negative integer');
+      }
+      options.depth = depth;
+      i += 1;
+      continue;
+    }
+
+    if (token === '--selector') {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        throw new HBError('BAD_REQUEST', 'Flag requires a value: --selector');
+      }
+      options.selector = value;
+      i += 1;
+      continue;
+    }
+
+    throw new HBError('BAD_REQUEST', `Unknown flag: ${token}`);
+  }
+
+  return { target, options };
+}
+
 function parseTab(raw: string): number | 'active' {
   if (raw === 'active') {
     return 'active';
@@ -570,7 +634,7 @@ function printHelp(): void {
       '  status',
       '  tabs',
       '  use <active|tab_id>',
-      '  snapshot [--tab <active|tab_id>]',
+      '  snapshot [--tab <active|tab_id>] [--interactive] [--cursor] [--compact] [--depth <N>] [--selector <css>]',
       '  click <selector|@ref> [--snapshot <snapshot_id>]',
       '  fill <selector|@ref> <value> [--snapshot <snapshot_id>]',
       '  keypress <key> [--tab <active|tab_id>]',
@@ -585,9 +649,28 @@ function printHelp(): void {
 }
 
 try {
-  await main();
+  if (isCliEntryPoint()) {
+    await main();
+  }
 } catch (error) {
-  const structured = asStructuredError(error) as StructuredError;
-  process.stderr.write(`${JSON.stringify({ ok: false, error: structured }, null, 2)}\n`);
-  process.exit(1);
+  if (isCliEntryPoint()) {
+    const structured = asStructuredError(error) as StructuredError;
+    process.stderr.write(`${JSON.stringify({ ok: false, error: structured }, null, 2)}\n`);
+    process.exit(1);
+  }
+  throw error;
+}
+
+function isCliEntryPoint(): boolean {
+  const argvEntry = process.argv[1];
+  if (!argvEntry) {
+    return false;
+  }
+  try {
+    const currentPath = realpathSync(fileURLToPath(import.meta.url));
+    const invokedPath = realpathSync(argvEntry);
+    return currentPath === invokedPath;
+  } catch {
+    return import.meta.url === pathToFileURL(argvEntry).href;
+  }
 }

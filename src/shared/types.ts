@@ -51,6 +51,14 @@ export interface SnapshotData {
   created_at: string;
 }
 
+export interface SnapshotOptions {
+  interactive?: boolean;
+  cursor?: boolean;
+  compact?: boolean;
+  depth?: number;
+  selector?: string;
+}
+
 export interface DaemonEvent {
   id: string;
   at: string;

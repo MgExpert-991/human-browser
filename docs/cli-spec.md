@@ -24,8 +24,9 @@
   - list tabs from extension
 - `human-browser use <active|tab_id>`
   - select target tab
-- `human-browser snapshot [--tab <active|tab_id>]`
+- `human-browser snapshot [--tab <active|tab_id>] [--interactive] [--cursor] [--compact] [--depth <N>] [--selector <css>]`
   - returns deterministic tree with refs and `snapshot_id`
+  - default is full-context snapshot (content + interactive). `--interactive` narrows output to interactive candidates only.
 - `human-browser click <selector|@ref> [--snapshot <snapshot_id>]`
 - `human-browser fill <selector|@ref> <value> [--snapshot <snapshot_id>]`
   - ref (`@eN`/`ref=eN`/`eN`) を使う場合は `--snapshot` 必須

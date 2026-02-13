@@ -40,6 +40,7 @@ human-browser daemon
 human-browser status
 human-browser tabs
 human-browser snapshot
+human-browser snapshot --interactive --cursor --compact --depth 3 --selector '#app'
 human-browser click '#login'
 human-browser fill '#email' hello@example.com
 # refs (@e1/ref=e1/e1) で操作する場合は --snapshot が必須
@@ -49,6 +50,8 @@ human-browser diagnose --limit 20
 # token を表示する場合のみ明示フラグを使う
 human-browser ws --show-token
 ```
+
+`snapshot` はデフォルトで本文コンテキストも含む全体スナップショットを返します。`--interactive` を付けると操作候補のみに絞ります。
 
 ## 仕様
 

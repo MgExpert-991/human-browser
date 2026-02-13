@@ -78,7 +78,7 @@ Failure:
 ## Required payload keys by command
 
 - `select_tab`: `{ target: "active" | number }`
-- `snapshot`: `{ target: "active" | number }`
+- `snapshot`: `{ target: "active" | number, interactive?: boolean, cursor?: boolean, compact?: boolean, depth?: number, selector?: string }`
 - `click`: `{ tab_id: number | "active", selector: string }`
 - `fill`: `{ tab_id: number | "active", selector: string, value: string }`
 - `keypress`: `{ tab_id: number | "active", key: string }`

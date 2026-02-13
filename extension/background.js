@@ -38,8 +38,74 @@ const state = {
 };
 
 const SNAPSHOT_SCRIPT = `(input) => {
-  const matches = document.querySelectorAll('a[href], button, input, textarea, select, [role="button"], [contenteditable="true"], [tabindex]');
-  const nodes = [];
+  const MAX_NODES = 300;
+  const INTERACTIVE_ROLES = new Set([
+    'button',
+    'link',
+    'textbox',
+    'checkbox',
+    'radio',
+    'combobox',
+    'listbox',
+    'menuitem',
+    'menuitemcheckbox',
+    'menuitemradio',
+    'option',
+    'searchbox',
+    'slider',
+    'spinbutton',
+    'switch',
+    'tab',
+    'treeitem',
+  ]);
+  const CONTENT_ROLES = new Set([
+    'heading',
+    'paragraph',
+    'listitem',
+    'article',
+    'main',
+    'navigation',
+    'region',
+    'cell',
+    'gridcell',
+    'columnheader',
+    'rowheader',
+    'label',
+  ]);
+  const STRUCTURAL_ROLES = new Set([
+    'generic',
+    'group',
+    'list',
+    'table',
+    'row',
+    'rowgroup',
+    'grid',
+    'menu',
+    'toolbar',
+    'tablist',
+    'tree',
+    'document',
+    'application',
+    'presentation',
+    'none',
+    'form',
+    'banner',
+    'complementary',
+    'contentinfo',
+  ]);
+
+  const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+  const interactiveOnly = Boolean(input?.interactive);
+  const includeCursor = Boolean(input?.cursor);
+  const compact = Boolean(input?.compact);
+  const rawDepth = Number(input?.depth);
+  const maxDepth = Number.isInteger(rawDepth) && rawDepth >= 0 ? rawDepth : null;
+  const selectorScope = typeof input?.selector === 'string' ? input.selector.trim() : '';
+  const root = selectorScope ? document.querySelector(selectorScope) : document.body;
+
+  if (!(root instanceof Element)) {
+    return [];
+  }
 
   const isVisible = (el) => {
     const style = getComputedStyle(el);
@@ -47,6 +113,38 @@ const SNAPSHOT_SCRIPT = `(input) => {
     const rect = el.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   };
+
+  const ownText = (el) => {
+    const chunks = [];
+    for (const node of el.childNodes) {
+      if (node.nodeType !== Node.TEXT_NODE) continue;
+      const value = normalize(node.textContent || '');
+      if (value) chunks.push(value);
+    }
+    return normalize(chunks.join(' '));
+  };
+
+  const labelledByText = (el) => {
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (!labelledBy) return '';
+
+    const ids = labelledBy
+      .split(/\\s+/)
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+
+    const parts = [];
+    for (const id of ids) {
+      const node = document.getElementById(id);
+      if (!node) continue;
+      const value = normalize(node.textContent || '');
+      if (value) parts.push(value);
+    }
+
+    return normalize(parts.join(' '));
+  };
+
+  const inputType = (el) => (el.getAttribute('type') || 'text').toLowerCase();
 
   const toRole = (el) => {
     const explicit = el.getAttribute('role');
@@ -57,46 +155,104 @@ const SNAPSHOT_SCRIPT = `(input) => {
     if (tag === 'button') return 'button';
     if (tag === 'textarea') return 'textbox';
     if (tag === 'select') return 'combobox';
+    if (tag === 'summary') return 'button';
+    if (tag === 'label') return 'label';
+    if (tag === 'p') return 'paragraph';
+    if (tag === 'li') return 'listitem';
+    if (tag === 'main') return 'main';
+    if (tag === 'nav') return 'navigation';
+    if (tag === 'section') return 'region';
+    if (tag === 'article') return 'article';
+    if (tag === 'table') return 'table';
+    if (tag === 'tr') return 'row';
+    if (tag === 'th') return 'columnheader';
+    if (tag === 'td') return 'cell';
+    if (tag === 'ul' || tag === 'ol') return 'list';
+    if (tag === 'form') return 'form';
+    if (tag === 'header') return 'banner';
+    if (tag === 'aside') return 'complementary';
+    if (tag === 'footer') return 'contentinfo';
+    if (/^h[1-6]$/.test(tag)) return 'heading';
 
     if (tag === 'input') {
-      const type = (el.getAttribute('type') || 'text').toLowerCase();
+      const type = inputType(el);
       if (type === 'button' || type === 'submit' || type === 'reset') return 'button';
       if (type === 'checkbox') return 'checkbox';
       if (type === 'radio') return 'radio';
+      if (type === 'range') return 'slider';
       return 'textbox';
     }
 
     return 'generic';
   };
 
-  const toName = (el) => {
-    const aria = el.getAttribute('aria-label');
-    if (aria && aria.trim()) return aria.trim();
+  const toName = (el, role) => {
+    const aria = normalize(el.getAttribute('aria-label'));
+    if (aria) return aria.slice(0, 120);
 
-    const labelledBy = el.getAttribute('aria-labelledby');
-    if (labelledBy) {
-      const labelNode = document.getElementById(labelledBy);
-      if (labelNode && labelNode.textContent && labelNode.textContent.trim()) {
-        return labelNode.textContent.trim();
+    const ariaLabelledBy = labelledByText(el);
+    if (ariaLabelledBy) return ariaLabelledBy.slice(0, 120);
+
+    if (el instanceof HTMLInputElement) {
+      const type = inputType(el);
+      if (type === 'password') {
+        return '';
       }
+      if ((type === 'button' || type === 'submit' || type === 'reset') && normalize(el.value)) {
+        return normalize(el.value).slice(0, 120);
+      }
+      if (normalize(el.placeholder)) {
+        return normalize(el.placeholder).slice(0, 120);
+      }
+      return '';
     }
 
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      // Never include live form values in snapshots.
-      // Snapshot output is often copied into logs or issue reports, so reading
-      // typed values here would directly leak credentials and personal data.
-      if (el instanceof HTMLInputElement) {
-        const type = (el.getAttribute('type') || 'text').toLowerCase();
-        if (type === 'password') return '';
+    if (el instanceof HTMLTextAreaElement) {
+      if (normalize(el.placeholder)) {
+        return normalize(el.placeholder).slice(0, 120);
       }
-      if (el.placeholder && el.placeholder.trim()) return el.placeholder.trim();
+      return '';
     }
 
-    if (el.textContent && el.textContent.trim()) {
-      return el.textContent.trim().replace(/\s+/g, ' ').slice(0, 120);
+    if (el instanceof HTMLSelectElement) {
+      const selected = el.selectedOptions?.[0];
+      const label = normalize(selected?.textContent || '');
+      return label.slice(0, 120);
+    }
+
+    const own = ownText(el);
+    if (own) {
+      return own.slice(0, 120);
+    }
+
+    if (CONTENT_ROLES.has(role)) {
+      const full = normalize(el.textContent || '');
+      if (full) return full.slice(0, 120);
     }
 
     return '';
+  };
+
+  const isInteractive = (el, role) => {
+    if (INTERACTIVE_ROLES.has(role)) return true;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'a' && el.getAttribute('href')) return true;
+    if (tag === 'button' || tag === 'select' || tag === 'textarea') return true;
+    if (tag === 'input') return true;
+    if (el.getAttribute('contenteditable') === 'true') return true;
+    const tabIndex = el.getAttribute('tabindex');
+    return tabIndex !== null && tabIndex !== '-1';
+  };
+
+  const cursorHints = (el) => {
+    if (!includeCursor) return [];
+    const hints = [];
+    const style = getComputedStyle(el);
+    if (style.cursor === 'pointer') hints.push('cursor:pointer');
+    if (el.hasAttribute('onclick') || el.onclick !== null) hints.push('onclick');
+    const tabIndex = el.getAttribute('tabindex');
+    if (tabIndex !== null && tabIndex !== '-1') hints.push('tabindex');
+    return hints;
   };
 
   const cssPath = (el) => {
@@ -120,21 +276,97 @@ const SNAPSHOT_SCRIPT = `(input) => {
     return 'body > ' + segments.join(' > ');
   };
 
+  const shouldInclude = (role, name, interactive, hints) => {
+    if (interactiveOnly) {
+      return interactive || hints.length > 0;
+    }
+    if (interactive || hints.length > 0) {
+      return true;
+    }
+    if (CONTENT_ROLES.has(role)) {
+      return name.length > 0;
+    }
+    if (compact) {
+      return false;
+    }
+    if (STRUCTURAL_ROLES.has(role)) {
+      return name.length > 0;
+    }
+    return name.length > 0;
+  };
+
   const seen = new Set();
+  const nodes = [];
+  const queue = [{ el: root, depth: 0 }];
 
-  for (const el of matches) {
+  while (queue.length > 0 && nodes.length < MAX_NODES) {
+    const current = queue.shift();
+    if (!current) break;
+    const { el, depth } = current;
     if (!(el instanceof Element)) continue;
+    if (maxDepth !== null && depth > maxDepth) continue;
     if (!isVisible(el)) continue;
-    const selector = cssPath(el);
-    if (seen.has(selector)) continue;
-    seen.add(selector);
 
-    nodes.push({
-      role: toRole(el),
-      name: toName(el),
-      selector,
-      suffix: '',
-    });
+    const role = toRole(el);
+    const name = toName(el, role);
+    const hints = cursorHints(el);
+    const interactive = isInteractive(el, role);
+    if (shouldInclude(role, name, interactive, hints)) {
+      const selector = cssPath(el);
+      if (!seen.has(selector)) {
+        seen.add(selector);
+        nodes.push({
+          role,
+          name,
+          selector,
+          suffix: hints.length > 0 ? '[' + hints.join(', ') + ']' : '',
+        });
+      }
+    }
+
+    if (maxDepth !== null && depth >= maxDepth) {
+      continue;
+    }
+
+    for (const child of el.children) {
+      queue.push({ el: child, depth: depth + 1 });
+    }
+  }
+
+  if (!interactiveOnly && nodes.length < MAX_NODES) {
+    const capturedNames = new Set(
+      nodes
+        .map((node) => normalize(node.name))
+        .filter((value) => value.length > 0),
+    );
+    const textKeys = new Set();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (nodes.length < MAX_NODES) {
+      const textNode = walker.nextNode();
+      if (!textNode) break;
+      const parent = textNode.parentElement;
+      if (!(parent instanceof Element)) continue;
+      if (!isVisible(parent)) continue;
+
+      const tagName = parent.tagName.toLowerCase();
+      if (tagName === 'script' || tagName === 'style' || tagName === 'noscript') continue;
+
+      const text = normalize(textNode.textContent || '');
+      if (text.length < 2) continue;
+      if (capturedNames.has(text)) continue;
+
+      const selector = cssPath(parent);
+      const key = selector + '::' + text;
+      if (textKeys.has(key)) continue;
+      textKeys.add(key);
+
+      nodes.push({
+        role: 'text',
+        name: text.slice(0, 120),
+        selector,
+        suffix: '[text]',
+      });
+    }
   }
 
   return nodes;
@@ -509,7 +741,16 @@ async function runCommand(command, payload) {
     case 'snapshot': {
       const tabId = await resolveTabId(payload.target);
       await ensureAttached(tabId);
-      const nodes = await evaluateScript(tabId, SNAPSHOT_SCRIPT, {});
+      const nodes = await evaluateScript(tabId, SNAPSHOT_SCRIPT, {
+        interactive: Boolean(payload.interactive),
+        cursor: Boolean(payload.cursor),
+        compact: Boolean(payload.compact),
+        depth:
+          typeof payload.depth === 'number' && Number.isInteger(payload.depth) && payload.depth >= 0
+            ? payload.depth
+            : undefined,
+        selector: typeof payload.selector === 'string' ? payload.selector : undefined,
+      });
       return {
         tab_id: tabId,
         nodes,

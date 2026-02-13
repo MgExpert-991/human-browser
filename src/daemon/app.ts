@@ -13,6 +13,7 @@ import type {
   QueueMode,
   SnapshotData,
   SnapshotNode,
+  SnapshotOptions,
   StructuredError,
 } from '../shared/types.ts';
 
@@ -413,7 +414,16 @@ async function executeCommand(
 
     case 'snapshot': {
       const target = args.target ?? state.selectedTabId ?? 'active';
-      const result = await sendBridgeCommand(state, 'snapshot', { target }, options);
+      const snapshotOptions = getSnapshotOptions(args);
+      const result = await sendBridgeCommand(
+        state,
+        'snapshot',
+        {
+          target,
+          ...snapshotOptions,
+        },
+        options,
+      );
       const tabId = Number(result.tab_id);
       const nodes = result.nodes as SnapshotNode[] | undefined;
 
@@ -998,6 +1008,52 @@ function getNumberField(input: Record<string, unknown>, field: string, fallback:
   }
 
   return value;
+}
+
+function getSnapshotOptions(args: Record<string, unknown>): SnapshotOptions {
+  const snapshotOptions: SnapshotOptions = {};
+
+  const interactive = args.interactive;
+  if (interactive !== undefined) {
+    if (typeof interactive !== 'boolean') {
+      throw new HBError('BAD_REQUEST', 'Field must be a boolean: interactive');
+    }
+    snapshotOptions.interactive = interactive;
+  }
+
+  const cursor = args.cursor;
+  if (cursor !== undefined) {
+    if (typeof cursor !== 'boolean') {
+      throw new HBError('BAD_REQUEST', 'Field must be a boolean: cursor');
+    }
+    snapshotOptions.cursor = cursor;
+  }
+
+  const compact = args.compact;
+  if (compact !== undefined) {
+    if (typeof compact !== 'boolean') {
+      throw new HBError('BAD_REQUEST', 'Field must be a boolean: compact');
+    }
+    snapshotOptions.compact = compact;
+  }
+
+  const depth = args.depth;
+  if (depth !== undefined) {
+    if (typeof depth !== 'number' || !Number.isInteger(depth) || depth < 0) {
+      throw new HBError('BAD_REQUEST', 'Field must be a non-negative integer: depth');
+    }
+    snapshotOptions.depth = depth;
+  }
+
+  const selector = args.selector;
+  if (selector !== undefined) {
+    if (typeof selector !== 'string' || selector.length === 0) {
+      throw new HBError('BAD_REQUEST', 'Field must be a non-empty string: selector');
+    }
+    snapshotOptions.selector = selector;
+  }
+
+  return snapshotOptions;
 }
 
 function getQueueMode(input: Record<string, unknown>, field: string, fallback: QueueMode): QueueMode {

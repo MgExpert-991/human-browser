@@ -92,6 +92,7 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
   });
 
   const daemon = await startDaemon(config);
+  let lastSnapshotPayload: Record<string, unknown> | undefined;
 
   const ws = new WebSocket(`ws://${config.daemon.host}:${config.daemon.port}/bridge?token=${config.auth.token}`);
 
@@ -156,6 +157,7 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
     }
 
     if (message.command === 'snapshot') {
+      lastSnapshotPayload = message.payload;
       reply(true, {
         tab_id: 1,
         nodes: [
@@ -202,6 +204,22 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
   });
 
   try {
+    await callDaemon(config, 'snapshot', {
+      interactive: true,
+      cursor: true,
+      compact: true,
+      depth: 2,
+      selector: '#app',
+    });
+    assert.deepEqual(lastSnapshotPayload, {
+      target: 'active',
+      interactive: true,
+      cursor: true,
+      compact: true,
+      depth: 2,
+      selector: '#app',
+    });
+
     const snapshot = await callDaemon(config, 'snapshot', {});
     const snapshotId = String(snapshot.snapshot_id);
 
