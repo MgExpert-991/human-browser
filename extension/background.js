@@ -1,6 +1,21 @@
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 30000;
 
+const ACTION_ICON_PATHS = {
+  connected: {
+    16: 'icons/connected-16.png',
+    32: 'icons/connected-32.png',
+    48: 'icons/connected-48.png',
+    128: 'icons/connected-128.png',
+  },
+  disconnected: {
+    16: 'icons/disconnected-16.png',
+    32: 'icons/disconnected-32.png',
+    48: 'icons/disconnected-48.png',
+    128: 'icons/disconnected-128.png',
+  },
+};
+
 const state = {
   socket: null,
   daemon: {
@@ -278,11 +293,14 @@ async function bootstrap() {
   const stored = await chrome.storage.local.get(['daemonWsUrl', 'daemonToken']);
   state.daemon.wsUrl = String(stored.daemonWsUrl ?? '');
   state.daemon.token = String(stored.daemonToken ?? '');
+  updateActionIcon();
   connectSocket();
 }
 
 function connectSocket(options = { force: false }) {
   if (!state.daemon.wsUrl || !state.daemon.token) {
+    state.daemon.connected = false;
+    updateActionIcon();
     setError('Config missing. Set daemon URL and token in popup.');
     return;
   }
@@ -304,6 +322,8 @@ function connectSocket(options = { force: false }) {
   }
 
   clearReconnectTimer();
+  state.daemon.connected = false;
+  updateActionIcon();
 
   const wsUrl = `${state.daemon.wsUrl}?token=${encodeURIComponent(state.daemon.token)}`;
   const socket = new WebSocket(wsUrl);
@@ -311,6 +331,7 @@ function connectSocket(options = { force: false }) {
 
   socket.onopen = () => {
     state.daemon.connected = true;
+    updateActionIcon();
     state.daemon.lastDisconnectReason = null;
     state.daemon.retryCount = 0;
     state.lastError = null;
@@ -336,6 +357,7 @@ function connectSocket(options = { force: false }) {
 
   socket.onclose = (event) => {
     state.daemon.connected = false;
+    updateActionIcon();
     state.daemon.lastDisconnectReason = event.reason || `close_code_${event.code}`;
     scheduleReconnect();
   };
@@ -654,6 +676,13 @@ function setError(message) {
     code: 'CONNECTION_ERROR',
     message,
   };
+}
+
+function updateActionIcon() {
+  const stateKey = state.daemon.connected ? 'connected' : 'disconnected';
+  chrome.action.setIcon({
+    path: ACTION_ICON_PATHS[stateKey],
+  });
 }
 
 function getUiStatus() {
