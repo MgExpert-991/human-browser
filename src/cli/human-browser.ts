@@ -94,6 +94,10 @@ async function main(): Promise<void> {
       printHelp();
       return;
     }
+    case 'ws': {
+      await commandWs(parsed.options);
+      return;
+    }
     case 'init': {
       await commandInit(parsed.args, parsed.options);
       return;
@@ -215,6 +219,22 @@ async function commandDaemon(options: GlobalOptions): Promise<void> {
   await new Promise<void>(() => {
     // Keep process alive.
   });
+}
+
+async function commandWs(options: GlobalOptions): Promise<void> {
+  const config = await readConfig(options.configPath);
+  const data = {
+    ws_url: `ws://${config.daemon.host}:${config.daemon.port}/bridge`,
+    token: config.auth.token,
+  };
+
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+    return;
+  }
+
+  process.stdout.write(`ws_url: ${data.ws_url}\n`);
+  process.stdout.write(`token: ${data.token}\n`);
 }
 
 async function commandDaemonRpc(command: string, args: string[], options: GlobalOptions): Promise<void> {
@@ -456,6 +476,7 @@ function printHelp(): void {
       '  human-browser [--json] [--config <path>] [--timeout <ms>] [--queue-mode hold|fail] <command> [args]',
       '',
       'Commands:',
+      '  ws',
       '  init [--host 127.0.0.1] [--port 18765] [--max-events 500] [--force]',
       '  daemon',
       '  status',
