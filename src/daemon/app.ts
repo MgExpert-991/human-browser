@@ -255,6 +255,10 @@ function onExtensionConnected(state: RuntimeState, ws: WebSocket): void {
   });
 
   ws.on('close', (code, reasonBuffer) => {
+    if (state.extensionSocket !== ws) {
+      return;
+    }
+
     const reason = reasonBuffer.toString() || `close_code_${code}`;
     state.extensionSocket = undefined;
     state.lastDisconnectReason = reason;
