@@ -1158,6 +1158,7 @@ function printHelp(): void {
       '  snapshot [--tab <active|tab_id>] [--interactive] [--cursor] [--compact] [--depth <N>] [--selector <css>]',
       '  click <selector|@ref> [--snapshot <snapshot_id>]',
       '  fill <selector|@ref> <value> [--snapshot <snapshot_id>]',
+      '    (for <input type="file">, <value> is treated as a local file path)',
       '  keypress <key> [--tab <active|tab_id>]',
       '  scroll <x> <y> [--tab <active|tab_id>]',
       '  navigate <url> [--tab <active|tab_id>]',

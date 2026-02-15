@@ -445,6 +445,45 @@ const FILL_SCRIPT = `(input) => {
   };
 }`;
 
+const FILE_INPUT_CHECK_SCRIPT = `(input) => {
+  const el = document.querySelector(input.selector);
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector',
+        details: { selector: input.selector },
+      },
+    };
+  }
+
+  if (!(el instanceof HTMLInputElement)) {
+    return { ok: true, is_file_input: false };
+  }
+
+  return { ok: true, is_file_input: el.type === 'file' };
+}`;
+
+const FILE_INPUT_EVENTS_SCRIPT = `(input) => {
+  const el = document.querySelector(input.selector);
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector',
+        details: { selector: input.selector },
+      },
+    };
+  }
+
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+
+  return { ok: true };
+}`;
+
 const KEYPRESS_SCRIPT = `(input) => {
   const target = document.activeElement || document.body;
   const key = input.key;
@@ -956,10 +995,24 @@ async function runCommand(command, payload) {
     case 'fill': {
       const tabId = await resolveTabId(payload.tab_id);
       await ensureAttached(tabId);
-      const response = await evaluateScript(tabId, FILL_SCRIPT, {
-        selector: String(payload.selector),
-        value: String(payload.value),
-      });
+      const selector = String(payload.selector);
+      const value = String(payload.value);
+
+      const fileCheck = await evaluateScript(tabId, FILE_INPUT_CHECK_SCRIPT, { selector });
+      if (!fileCheck?.ok) {
+        throw fileCheck?.error || new Error('fill failed');
+      }
+
+      if (fileCheck?.is_file_input) {
+        await setFileInputFiles(tabId, selector, [value]);
+        const events = await evaluateScript(tabId, FILE_INPUT_EVENTS_SCRIPT, { selector });
+        if (!events?.ok) {
+          throw events?.error || new Error('fill failed');
+        }
+        return { ok: true };
+      }
+
+      const response = await evaluateScript(tabId, FILL_SCRIPT, { selector, value });
       if (!response?.ok) {
         throw response?.error || new Error('fill failed');
       }
@@ -1592,6 +1645,65 @@ async function evaluateRaw(tabId, expression) {
   }
 
   return response?.result?.value;
+}
+
+async function setFileInputFiles(tabId, selector, files) {
+  let doc;
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'DOM.enable');
+    doc = await chrome.debugger.sendCommand({ tabId }, 'DOM.getDocument', { depth: 0 });
+  } catch (error) {
+    throw {
+      code: 'CDP_DOM_ENABLE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      details: { tab_id: tabId },
+    };
+  }
+
+  const rootNodeId = doc?.root?.nodeId;
+  if (typeof rootNodeId !== 'number') {
+    throw {
+      code: 'CDP_DOM_DOC_FAILED',
+      message: 'Could not resolve DOM document root',
+      details: { tab_id: tabId },
+    };
+  }
+
+  let nodeId;
+  try {
+    const queried = await chrome.debugger.sendCommand({ tabId }, 'DOM.querySelector', {
+      nodeId: rootNodeId,
+      selector,
+    });
+    nodeId = queried?.nodeId;
+  } catch (error) {
+    throw {
+      code: 'CDP_DOM_QUERY_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      details: { tab_id: tabId, selector },
+    };
+  }
+
+  if (typeof nodeId !== 'number' || nodeId === 0) {
+    throw {
+      code: 'NO_MATCH',
+      message: 'Element not found for selector',
+      details: { selector },
+    };
+  }
+
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'DOM.setFileInputFiles', {
+      nodeId,
+      files,
+    });
+  } catch (error) {
+    throw {
+      code: 'CDP_SET_FILE_INPUT_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      details: { tab_id: tabId, selector },
+    };
+  }
 }
 
 async function getTabUrl(tabId) {

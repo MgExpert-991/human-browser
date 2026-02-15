@@ -33,6 +33,7 @@
 - `human-browser click <selector|@ref> [--snapshot <snapshot_id>]`
 - `human-browser fill <selector|@ref> <value> [--snapshot <snapshot_id>]`
   - ref (`@eN`/`ref=eN`/`eN`) を使う場合は `--snapshot` 必須
+  - `input[type=file]` を対象にする場合は `<value>` にローカルファイルパスを渡す
 - `human-browser keypress <key> [--tab <active|tab_id>]`
 - `human-browser scroll <x> <y> [--tab <active|tab_id>]`
 - `human-browser navigate <url> [--tab <active|tab_id>]`
