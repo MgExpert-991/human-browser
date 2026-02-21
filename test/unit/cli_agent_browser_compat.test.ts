@@ -80,3 +80,32 @@ test('wait-for alias maps to wait', () => {
     timeout_ms: 1500,
   });
 });
+
+test('click supports --nth for selector targeting', () => {
+  const request = toDaemonRequest('click', ['.scene-card button', '--nth', '1']);
+  assert.equal(request.command, 'click');
+  assert.deepEqual(request.args, {
+    selector: '.scene-card button',
+    nth: 1,
+  });
+});
+
+test('fill supports --nth and ref payloads', () => {
+  const request = toDaemonRequest('fill', ['@e2', 'value', '--snapshot', 's1', '--nth', '-1']);
+  assert.equal(request.command, 'fill');
+  assert.deepEqual(request.args, {
+    ref: 'e2',
+    value: 'value',
+    snapshot_id: 's1',
+    nth: -1,
+  });
+});
+
+test('--nth must be integer >= -1', () => {
+  assert.throws(
+    () => {
+      toDaemonRequest('click', ['#login', '--nth', '-2']);
+    },
+    (error: unknown) => error instanceof HBError && error.structured.code === 'BAD_REQUEST',
+  );
+});

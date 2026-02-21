@@ -593,6 +593,7 @@ async function executeCommand(
 
     case 'click': {
       const target = resolveActionTarget(args, 'click');
+      const explicitNth = getOptionalNth(args.nth);
 
       if (target.kind === 'ref') {
         const snapshotId = getRequiredSnapshotId(args, 'click');
@@ -616,6 +617,7 @@ async function executeCommand(
           {
             tab_id: snapshot.tab_id,
             selector: refData.selector,
+            nth: explicitNth,
           },
           options,
         );
@@ -625,6 +627,7 @@ async function executeCommand(
           tab_id: snapshot.tab_id,
           ref: target.ref,
           selector: refData.selector,
+          nth: explicitNth,
           result,
         };
       }
@@ -636,6 +639,7 @@ async function executeCommand(
         {
           tab_id: tabId,
           selector: target.selector,
+          nth: explicitNth,
         },
         options,
       );
@@ -643,6 +647,7 @@ async function executeCommand(
       return {
         tab_id: tabId,
         selector: target.selector,
+        nth: explicitNth,
         result,
       };
     }
@@ -650,6 +655,7 @@ async function executeCommand(
     case 'fill': {
       const value = getStringField(args, 'value');
       const target = resolveActionTarget(args, 'fill');
+      const explicitNth = getOptionalNth(args.nth);
 
       if (target.kind === 'ref') {
         const snapshotId = getRequiredSnapshotId(args, 'fill');
@@ -674,6 +680,7 @@ async function executeCommand(
             tab_id: snapshot.tab_id,
             selector: refData.selector,
             value,
+            nth: explicitNth,
           },
           options,
         );
@@ -683,6 +690,7 @@ async function executeCommand(
           tab_id: snapshot.tab_id,
           ref: target.ref,
           selector: refData.selector,
+          nth: explicitNth,
           result,
         };
       }
@@ -695,6 +703,7 @@ async function executeCommand(
           tab_id: tabId,
           selector: target.selector,
           value,
+          nth: explicitNth,
         },
         options,
       );
@@ -702,6 +711,7 @@ async function executeCommand(
       return {
         tab_id: tabId,
         selector: target.selector,
+        nth: explicitNth,
         result,
       };
     }
@@ -769,6 +779,7 @@ async function executeCommand(
 
     case 'hover': {
       const target = resolveActionTarget(args, 'hover');
+      const explicitNth = getOptionalNth(args.nth);
 
       if (target.kind === 'ref') {
         const snapshotId = getRequiredSnapshotId(args, 'hover');
@@ -792,6 +803,7 @@ async function executeCommand(
           {
             tab_id: snapshot.tab_id,
             selector: refData.selector,
+            nth: explicitNth,
           },
           options,
         );
@@ -801,6 +813,7 @@ async function executeCommand(
           tab_id: snapshot.tab_id,
           ref: target.ref,
           selector: refData.selector,
+          nth: explicitNth,
           result,
         };
       }
@@ -812,6 +825,7 @@ async function executeCommand(
         {
           tab_id: tabId,
           selector: target.selector,
+          nth: explicitNth,
         },
         options,
       );
@@ -819,6 +833,7 @@ async function executeCommand(
       return {
         tab_id: tabId,
         selector: target.selector,
+        nth: explicitNth,
         result,
       };
     }
@@ -841,12 +856,14 @@ async function executeCommand(
         {
           tab_id: target.tabId,
           selector: target.selector,
+          nth: target.nth,
         },
         options,
       );
       return {
         tab_id: target.tabId,
         selector: target.selector,
+        nth: target.nth,
         result,
       };
     }
@@ -859,12 +876,14 @@ async function executeCommand(
         {
           tab_id: target.tabId,
           selector: target.selector,
+          nth: target.nth,
         },
         options,
       );
       return {
         tab_id: target.tabId,
         selector: target.selector,
+        nth: target.nth,
         result,
       };
     }
@@ -1209,6 +1228,16 @@ function getOptionalThreshold(raw: unknown): number | undefined {
   return raw;
 }
 
+function getOptionalNth(raw: unknown): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < -1) {
+    throw new HBError('BAD_REQUEST', `nth must be an integer >= -1, got ${String(raw)}`);
+  }
+  return raw;
+}
+
 function getWaitUntil(raw: unknown): 'load' | 'domcontentloaded' | 'networkidle' {
   if (raw === undefined) {
     return 'load';
@@ -1357,9 +1386,10 @@ function resolveReadTarget(
   args: Record<string, unknown>,
   command: 'text' | 'html',
   allowEmptySelector = false,
-): { tabId: number | 'active'; selector?: string } {
+): { tabId: number | 'active'; selector?: string; nth?: number } {
   const refRaw = typeof args.ref === 'string' ? args.ref : undefined;
   const selectorRaw = typeof args.selector === 'string' ? args.selector : undefined;
+  const explicitNth = getOptionalNth(args.nth);
 
   if (refRaw && selectorRaw) {
     throw new HBError('BAD_REQUEST', `${command} supports either args.ref or args.selector, not both`);
@@ -1387,6 +1417,7 @@ function resolveReadTarget(
     return {
       tabId: snapshot.tab_id,
       selector: refData.selector,
+      nth: explicitNth,
     };
   }
 
@@ -1410,11 +1441,13 @@ function resolveReadTarget(
       return {
         tabId: snapshot.tab_id,
         selector: refData.selector,
+        nth: explicitNth,
       };
     }
     return {
       tabId: resolveTabForAction(state, args),
       selector: selectorRaw,
+      nth: explicitNth,
     };
   }
 

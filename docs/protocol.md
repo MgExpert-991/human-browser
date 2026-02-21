@@ -79,17 +79,17 @@ Failure:
 
 - `select_tab`: `{ target: "active" | number }`
 - `snapshot`: `{ target: "active" | number, interactive?: boolean, cursor?: boolean, compact?: boolean, depth?: number, selector?: string }`
-- `click`: `{ tab_id: number | "active", selector: string }`
-- `fill`: `{ tab_id: number | "active", selector: string, value: string }`
+- `click`: `{ tab_id: number | "active", selector: string, nth?: number }`
+- `fill`: `{ tab_id: number | "active", selector: string, value: string, nth?: number }`
 - `keypress`: `{ tab_id: number | "active", key: string }`
 - `scroll`: `{ tab_id: number | "active", x: number, y: number }`
 - `navigate`: `{ tab_id: number | "active", url: string }`
 - `open`: `{ tab_id: number | "active", url: string }`
 - `close`: `{ tab_id: number | "active" }`
-- `hover`: `{ tab_id: number | "active", selector: string }`
+- `hover`: `{ tab_id: number | "active", selector: string, nth?: number }`
 - `eval`: `{ tab_id: number | "active", script: string }`
-- `text`: `{ tab_id: number | "active", selector: string }`
-- `html`: `{ tab_id: number | "active", selector?: string }`
+- `text`: `{ tab_id: number | "active", selector: string, nth?: number }`
+- `html`: `{ tab_id: number | "active", selector?: string, nth?: number }`
 - `wait`: `{ tab_id: number | "active", selector?: string, sleep_ms?: number, timeout_ms?: number, text?: string, url_pattern?: string, load_state?: string, expression?: string }`
 - `screenshot`: `{ tab_id: number | "active", full_page?: boolean, selector?: string }`
 - `pdf`: `{ tab_id: number | "active" }`

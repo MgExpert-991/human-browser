@@ -47,6 +47,8 @@ human-browser diff screenshot --baseline before.png
 human-browser diff url https://staging.example.com https://prod.example.com --screenshot
 human-browser click '#login'
 human-browser fill '#email' hello@example.com
+human-browser click '.scene-card button' --nth 1
+human-browser fill 'textarea[placeholder="Prompt"]' "scene 2" --nth 1
 human-browser open https://example.com
 human-browser hover '#menu'
 human-browser screenshot

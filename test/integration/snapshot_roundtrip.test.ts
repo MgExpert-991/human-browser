@@ -92,6 +92,36 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
     button.setAttribute('data-clicked', '1');
   });
 
+  const duplicateButton1 = dom.window.document.createElement('button');
+  duplicateButton1.id = 'dup-login-1';
+  duplicateButton1.className = 'dup-login';
+  duplicateButton1.textContent = 'duplicate 1';
+  duplicateButton1.addEventListener('click', () => {
+    duplicateButton1.setAttribute('data-clicked', '1');
+  });
+  dom.window.document.body.appendChild(duplicateButton1);
+
+  const duplicateButton2 = dom.window.document.createElement('button');
+  duplicateButton2.id = 'dup-login-2';
+  duplicateButton2.className = 'dup-login';
+  duplicateButton2.textContent = 'duplicate 2';
+  duplicateButton2.addEventListener('click', () => {
+    duplicateButton2.setAttribute('data-clicked', '1');
+  });
+  dom.window.document.body.appendChild(duplicateButton2);
+
+  const duplicateInput1 = dom.window.document.createElement('input');
+  duplicateInput1.id = 'dup-email-1';
+  duplicateInput1.className = 'dup-email';
+  duplicateInput1.placeholder = '重複メール';
+  dom.window.document.body.appendChild(duplicateInput1);
+
+  const duplicateInput2 = dom.window.document.createElement('input');
+  duplicateInput2.id = 'dup-email-2';
+  duplicateInput2.className = 'dup-email';
+  duplicateInput2.placeholder = '重複メール';
+  dom.window.document.body.appendChild(duplicateInput2);
+
   const daemon = await startDaemon(config);
   let lastSnapshotPayload: Record<string, unknown> | undefined;
   let snapshotCount = 0;
@@ -165,6 +195,10 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
       const nodes = [
         { role: 'button', name: 'ログイン', selector: '#login' },
         { role: 'textbox', name: 'メールアドレス', selector: '#email' },
+        { role: 'button', name: '重複ボタン', selector: '#dup-login-1' },
+        { role: 'button', name: '重複ボタン', selector: '#dup-login-2' },
+        { role: 'textbox', name: '重複メール', selector: '#dup-email-1' },
+        { role: 'textbox', name: '重複メール', selector: '#dup-email-2' },
       ];
       if (snapshotCount >= 2) {
         nodes.push({ role: 'link', name: 'ヘルプ', selector: '#help-link' });
@@ -178,7 +212,11 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
 
     if (message.command === 'click') {
       const selector = String(message.payload?.selector ?? '');
-      const el = dom.window.document.querySelector(selector);
+      const nthRaw = message.payload?.nth;
+      const nth = typeof nthRaw === 'number' && Number.isInteger(nthRaw) ? nthRaw : 0;
+      const all = dom.window.document.querySelectorAll(selector);
+      const index = nth === -1 ? all.length - 1 : nth;
+      const el = all[index];
       if (!el) {
         reply(false, { code: 'NO_MATCH', message: 'selector not found' });
         return;
@@ -193,7 +231,11 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
     if (message.command === 'fill') {
       const selector = String(message.payload?.selector ?? '');
       const value = String(message.payload?.value ?? '');
-      const input = dom.window.document.querySelector(selector);
+      const nthRaw = message.payload?.nth;
+      const nth = typeof nthRaw === 'number' && Number.isInteger(nthRaw) ? nthRaw : 0;
+      const all = dom.window.document.querySelectorAll(selector);
+      const index = nth === -1 ? all.length - 1 : nth;
+      const input = all[index];
       if (!(input instanceof dom.window.HTMLInputElement)) {
         reply(false, { code: 'NOT_FILLABLE', message: 'input not found' });
         return;
@@ -255,6 +297,18 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
       snapshot_id: snapshotId,
     });
 
+    await callDaemon(config, 'click', {
+      ref: 'e4',
+      snapshot_id: snapshotId,
+    });
+
+    await callDaemon(config, 'fill', {
+      ref: 'e6',
+      value: 'ref-second@example.com',
+      snapshot_id: snapshotId,
+    });
+    assert.equal(duplicateInput2.value, 'ref-second@example.com');
+
     const refWithoutSnapshot = await callDaemonRaw(config, 'click', {
       ref: 'e1',
     });
@@ -271,6 +325,17 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
       value: 'bob@example.com',
     });
 
+    await callDaemon(config, 'click', {
+      selector: '.dup-login',
+      nth: 1,
+    });
+
+    await callDaemon(config, 'fill', {
+      selector: '.dup-email',
+      value: 'nth@example.com',
+      nth: -1,
+    });
+
     const clicked = dom.window.document.querySelector('#login')?.getAttribute('data-clicked');
     assert.equal(clicked, '1');
 
@@ -279,6 +344,11 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
       throw new Error('email input missing');
     }
     assert.equal(email.value, 'bob@example.com');
+
+    assert.equal(duplicateButton1.getAttribute('data-clicked'), null);
+    assert.equal(duplicateButton2.getAttribute('data-clicked'), '1');
+    assert.equal(duplicateInput1.value, '');
+    assert.equal(duplicateInput2.value, 'nth@example.com');
   } finally {
     ws.close();
     await daemon.close();

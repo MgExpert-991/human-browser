@@ -84,6 +84,15 @@ const SNAPSHOT_SCRIPT = `(input) => {
     'rowheader',
     'label',
   ]);
+  const INTERACTIVE_TEXT_NAME_ROLES = new Set([
+    'button',
+    'link',
+    'tab',
+    'menuitem',
+    'menuitemcheckbox',
+    'menuitemradio',
+    'option',
+  ]);
   const STRUCTURAL_ROLES = new Set([
     'generic',
     'group',
@@ -237,6 +246,11 @@ const SNAPSHOT_SCRIPT = `(input) => {
       return own.slice(0, 120);
     }
 
+    if (INTERACTIVE_TEXT_NAME_ROLES.has(role)) {
+      const full = normalize(el.textContent || '');
+      if (full) return full.slice(0, 120);
+    }
+
     if (CONTENT_ROLES.has(role)) {
       const full = normalize(el.textContent || '');
       if (full) return full.slice(0, 120);
@@ -385,14 +399,39 @@ const SNAPSHOT_SCRIPT = `(input) => {
 }`;
 
 const CLICK_SCRIPT = `(input) => {
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -411,14 +450,39 @@ const CLICK_SCRIPT = `(input) => {
 }`;
 
 const FILL_SCRIPT = `(input) => {
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -446,14 +510,39 @@ const FILL_SCRIPT = `(input) => {
 }`;
 
 const FILE_INPUT_CHECK_SCRIPT = `(input) => {
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -466,14 +555,39 @@ const FILE_INPUT_CHECK_SCRIPT = `(input) => {
 }`;
 
 const FILE_INPUT_EVENTS_SCRIPT = `(input) => {
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -514,14 +628,39 @@ const NAVIGATE_SCRIPT = `(input) => {
 }`;
 
 const HOVER_POINT_SCRIPT = `(input) => {
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -582,14 +721,39 @@ const SCREENSHOT_CLIP_SCRIPT = `(input) => {
 }`;
 
 const TEXT_SCRIPT = `(input) => {
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -608,14 +772,39 @@ const HTML_SCRIPT = `(input) => {
     };
   }
 
-  const el = document.querySelector(input.selector);
-  if (!el) {
+  const all = document.querySelectorAll(input.selector);
+  if (all.length === 0) {
     return {
       ok: false,
       error: {
         code: 'NO_MATCH',
         message: 'Element not found for selector',
         details: { selector: input.selector },
+      },
+    };
+  }
+  const hasNth = input.nth !== undefined && input.nth !== null;
+  const rawNth = Number(input.nth);
+  if (hasNth && (!Number.isInteger(rawNth) || rawNth < -1)) {
+    return {
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'nth must be an integer >= -1',
+        details: { nth: input.nth },
+      },
+    };
+  }
+  const nth = hasNth ? rawNth : 0;
+  const index = nth === -1 ? all.length - 1 : nth;
+  const el = all[index];
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector: input.selector, nth, count: all.length },
       },
     };
   }
@@ -972,6 +1161,20 @@ function sendExtensionEvent(name, payload = {}) {
   });
 }
 
+function getOptionalNth(raw) {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < -1) {
+    throw {
+      code: 'BAD_REQUEST',
+      message: 'nth must be an integer >= -1',
+      details: { nth: raw },
+    };
+  }
+  return raw;
+}
+
 async function runCommand(command, payload) {
   switch (command) {
     case 'list_tabs': {
@@ -1018,8 +1221,10 @@ async function runCommand(command, payload) {
     case 'click': {
       const tabId = await resolveTabId(payload.tab_id);
       await ensureAttached(tabId);
+      const nth = getOptionalNth(payload.nth);
       const response = await evaluateScript(tabId, CLICK_SCRIPT, {
         selector: String(payload.selector),
+        nth,
       });
       if (!response?.ok) {
         throw response?.error || new Error('click failed');
@@ -1032,22 +1237,23 @@ async function runCommand(command, payload) {
       await ensureAttached(tabId);
       const selector = String(payload.selector);
       const value = String(payload.value);
+      const nth = getOptionalNth(payload.nth);
 
-      const fileCheck = await evaluateScript(tabId, FILE_INPUT_CHECK_SCRIPT, { selector });
+      const fileCheck = await evaluateScript(tabId, FILE_INPUT_CHECK_SCRIPT, { selector, nth });
       if (!fileCheck?.ok) {
         throw fileCheck?.error || new Error('fill failed');
       }
 
       if (fileCheck?.is_file_input) {
-        await setFileInputFiles(tabId, selector, [value]);
-        const events = await evaluateScript(tabId, FILE_INPUT_EVENTS_SCRIPT, { selector });
+        await setFileInputFiles(tabId, selector, [value], nth);
+        const events = await evaluateScript(tabId, FILE_INPUT_EVENTS_SCRIPT, { selector, nth });
         if (!events?.ok) {
           throw events?.error || new Error('fill failed');
         }
         return { ok: true };
       }
 
-      const response = await evaluateScript(tabId, FILL_SCRIPT, { selector, value });
+      const response = await evaluateScript(tabId, FILL_SCRIPT, { selector, value, nth });
       if (!response?.ok) {
         throw response?.error || new Error('fill failed');
       }
@@ -1109,8 +1315,10 @@ async function runCommand(command, payload) {
     case 'hover': {
       const tabId = await resolveTabId(payload.tab_id);
       await ensureAttached(tabId);
+      const nth = getOptionalNth(payload.nth);
       const point = await evaluateScript(tabId, HOVER_POINT_SCRIPT, {
         selector: String(payload.selector),
+        nth,
       });
       if (!point?.ok) {
         throw point?.error || new Error('hover failed');
@@ -1144,8 +1352,10 @@ async function runCommand(command, payload) {
     case 'text': {
       const tabId = await resolveTabId(payload.tab_id);
       await ensureAttached(tabId);
+      const nth = getOptionalNth(payload.nth);
       const response = await evaluateScript(tabId, TEXT_SCRIPT, {
         selector: String(payload.selector),
+        nth,
       });
       if (!response?.ok) {
         throw response?.error || new Error('text failed');
@@ -1156,8 +1366,10 @@ async function runCommand(command, payload) {
     case 'html': {
       const tabId = await resolveTabId(payload.tab_id);
       await ensureAttached(tabId);
+      const nth = getOptionalNth(payload.nth);
       const response = await evaluateScript(tabId, HTML_SCRIPT, {
         selector: typeof payload.selector === 'string' ? payload.selector : undefined,
+        nth,
       });
       if (!response?.ok) {
         throw response?.error || new Error('html failed');
@@ -1712,7 +1924,7 @@ async function evaluateRaw(tabId, expression) {
   return response?.result?.value;
 }
 
-async function setFileInputFiles(tabId, selector, files) {
+async function setFileInputFiles(tabId, selector, files, nth) {
   let doc;
   try {
     await chrome.debugger.sendCommand({ tabId }, 'DOM.enable');
@@ -1736,24 +1948,36 @@ async function setFileInputFiles(tabId, selector, files) {
 
   let nodeId;
   try {
-    const queried = await chrome.debugger.sendCommand({ tabId }, 'DOM.querySelector', {
+    const queried = await chrome.debugger.sendCommand({ tabId }, 'DOM.querySelectorAll', {
       nodeId: rootNodeId,
       selector,
     });
-    nodeId = queried?.nodeId;
+    const nodeIds = Array.isArray(queried?.nodeIds) ? queried.nodeIds : [];
+    if (nodeIds.length === 0) {
+      throw {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector',
+        details: { selector },
+      };
+    }
+
+    const index = nth === -1 ? nodeIds.length - 1 : (typeof nth === 'number' ? nth : 0);
+    nodeId = nodeIds[index];
+    if (typeof nodeId !== 'number' || nodeId === 0) {
+      throw {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector and nth',
+        details: { selector, nth, count: nodeIds.length },
+      };
+    }
   } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error) {
+      throw error;
+    }
     throw {
       code: 'CDP_DOM_QUERY_FAILED',
       message: error instanceof Error ? error.message : String(error),
       details: { tab_id: tabId, selector },
-    };
-  }
-
-  if (typeof nodeId !== 'number' || nodeId === 0) {
-    throw {
-      code: 'NO_MATCH',
-      message: 'Element not found for selector',
-      details: { selector },
     };
   }
 

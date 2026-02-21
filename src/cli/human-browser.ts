@@ -375,8 +375,9 @@ export function toDaemonRequest(
       if (!selectorOrRef) {
         throw new HBError('BAD_REQUEST', 'click requires <selector|@ref>');
       }
-      const parsed = parseNamedFlags(args.slice(1), ['--snapshot']);
+      const parsed = parseNamedFlags(args.slice(1), ['--snapshot', '--nth']);
       const ref = parseRefArg(selectorOrRef);
+      const nth = parseOptionalNthArg(parsed['--nth']);
 
       if (ref) {
         const snapshotId = parsed['--snapshot'];
@@ -388,6 +389,7 @@ export function toDaemonRequest(
           args: {
             ref,
             snapshot_id: snapshotId,
+            nth,
           },
         };
       }
@@ -396,6 +398,7 @@ export function toDaemonRequest(
         command,
         args: {
           selector: selectorOrRef,
+          nth,
         },
       };
     }
@@ -405,8 +408,9 @@ export function toDaemonRequest(
       if (!selectorOrRef || value === undefined) {
         throw new HBError('BAD_REQUEST', 'fill requires <selector|@ref> <value>');
       }
-      const parsed = parseNamedFlags(args.slice(2), ['--snapshot']);
+      const parsed = parseNamedFlags(args.slice(2), ['--snapshot', '--nth']);
       const ref = parseRefArg(selectorOrRef);
+      const nth = parseOptionalNthArg(parsed['--nth']);
 
       if (ref) {
         const snapshotId = parsed['--snapshot'];
@@ -419,6 +423,7 @@ export function toDaemonRequest(
             ref,
             value,
             snapshot_id: snapshotId,
+            nth,
           },
         };
       }
@@ -428,6 +433,7 @@ export function toDaemonRequest(
         args: {
           selector: selectorOrRef,
           value,
+          nth,
         },
       };
     }
@@ -749,6 +755,19 @@ function parseNamedFlagsAllowBooleans(
   }
 
   return map;
+}
+
+function parseOptionalNthArg(raw: string | undefined): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const nth = Number(raw);
+  if (!Number.isInteger(nth) || nth < -1) {
+    throw new HBError('BAD_REQUEST', `nth must be an integer >= -1, got: ${raw}`);
+  }
+
+  return nth;
 }
 
 function parseScreenshotArgs(args: string[]): {
@@ -1421,8 +1440,8 @@ function printHelp(): void {
       '  diff url <url1> <url2> [--screenshot] [--full] [--wait-until <load|domcontentloaded|networkidle>] [--selector <sel>] [--compact] [--depth <n>]',
       '  use <active|tab_id>',
       '  snapshot [--tab <active|tab_id>] [-i|--interactive] [-C|--cursor] [-c|--compact] [-d|--depth <N>] [-s|--selector <css>]',
-      '  click <selector|@ref> [--snapshot <snapshot_id>]',
-      '  fill <selector|@ref> <value> [--snapshot <snapshot_id>]',
+      '  click <selector|@ref> [--snapshot <snapshot_id>] [--nth <index|-1>]',
+      '  fill <selector|@ref> <value> [--snapshot <snapshot_id>] [--nth <index|-1>]',
       '    (for <input type="file">, <value> is treated as a local file path)',
       '  keypress|press|key <key> [--tab <active|tab_id>]',
       '  scroll <x> <y> [--tab <active|tab_id>]',
