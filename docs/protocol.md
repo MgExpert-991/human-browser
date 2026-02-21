@@ -91,7 +91,7 @@ Failure:
 - `text`: `{ tab_id: number | "active", selector: string }`
 - `html`: `{ tab_id: number | "active", selector?: string }`
 - `wait`: `{ tab_id: number | "active", selector?: string, sleep_ms?: number, timeout_ms?: number, text?: string, url_pattern?: string, load_state?: string, expression?: string }`
-- `screenshot`: `{ tab_id: number | "active", full_page?: boolean }`
+- `screenshot`: `{ tab_id: number | "active", full_page?: boolean, selector?: string }`
 - `pdf`: `{ tab_id: number | "active" }`
 - `cookies_get`: `{ tab_id: number | "active", url?: string }`
 - `cookies_set`: `{ tab_id: number | "active", name: string, value: string, url?: string }`

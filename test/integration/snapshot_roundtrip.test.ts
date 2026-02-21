@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { JSDOM } from 'jsdom';
 import { WebSocket } from 'ws';
 import { startDaemon } from '../../src/daemon/app.ts';
@@ -93,6 +94,8 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
 
   const daemon = await startDaemon(config);
   let lastSnapshotPayload: Record<string, unknown> | undefined;
+  let snapshotCount = 0;
+  let baselineDir: string | undefined;
 
   const ws = new WebSocket(`ws://${config.daemon.host}:${config.daemon.port}/bridge?token=${config.auth.token}`);
 
@@ -157,13 +160,18 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
     }
 
     if (message.command === 'snapshot') {
+      snapshotCount += 1;
       lastSnapshotPayload = message.payload;
+      const nodes = [
+        { role: 'button', name: 'ログイン', selector: '#login' },
+        { role: 'textbox', name: 'メールアドレス', selector: '#email' },
+      ];
+      if (snapshotCount >= 2) {
+        nodes.push({ role: 'link', name: 'ヘルプ', selector: '#help-link' });
+      }
       reply(true, {
         tab_id: 1,
-        nodes: [
-          { role: 'button', name: 'ログイン', selector: '#login' },
-          { role: 'textbox', name: 'メールアドレス', selector: '#email' },
-        ],
+        nodes,
       });
       return;
     }
@@ -204,7 +212,7 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
   });
 
   try {
-    await callDaemon(config, 'snapshot', {
+    const firstSnapshot = await callDaemon(config, 'snapshot', {
       interactive: true,
       cursor: true,
       compact: true,
@@ -225,6 +233,16 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
 
     assert.match(snapshot.tree ? String(snapshot.tree) : '', /\[ref=e1\]/);
     assert.match(snapshot.tree ? String(snapshot.tree) : '', /\[ref=e2\]/);
+    assert.match(snapshot.tree ? String(snapshot.tree) : '', /\[ref=e3\]/);
+
+    baselineDir = await mkdtemp(join(tmpdir(), 'human-browser-diff-'));
+    const baselinePath = join(baselineDir, 'baseline.txt');
+    await writeFile(baselinePath, String(firstSnapshot.tree), 'utf8');
+    const diff = await callDaemon(config, 'diff_snapshot', {
+      baseline: baselinePath,
+    });
+    assert.equal(diff.changed, true);
+    assert.equal((diff.additions as number) > 0, true);
 
     await callDaemon(config, 'click', {
       ref: 'e1',
@@ -264,5 +282,8 @@ test('snapshot -> click -> fill roundtrip works via daemon/bridge protocol', asy
   } finally {
     ws.close();
     await daemon.close();
+    if (baselineDir) {
+      await rm(baselineDir, { recursive: true, force: true });
+    }
   }
 });

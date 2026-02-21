@@ -25,6 +25,12 @@
   - connection/session status
 - `human-browser tabs`
   - list tabs from extension
+- `human-browser diff snapshot [--baseline <file>] [--selector <sel>] [--compact] [--depth <n>]`
+  - 現在のsnapshotと比較対象（前回snapshotまたは baseline ファイル）を行単位でdiff
+- `human-browser diff screenshot --baseline <file> [--output <file>] [--threshold <0-1>] [--selector <sel>] [--full]`
+  - 現在のスクリーンショットを baseline 画像とピクセル比較
+- `human-browser diff url <url1> <url2> [--screenshot] [--full] [--wait-until <load|domcontentloaded|networkidle>] [--selector <sel>] [--compact] [--depth <n>]`
+  - 2 URL を順に開いて snapshot diff（必要なら screenshot diff も）を返す
 - `human-browser use <active|tab_id>`
   - select target tab
 - `human-browser snapshot [--tab <active|tab_id>] [--interactive] [--cursor] [--compact] [--depth <N>] [--selector <css>]`
@@ -40,7 +46,7 @@
 - `human-browser open <url> [--tab <active|tab_id>]`
 - `human-browser close [--tab <active|tab_id>]`
 - `human-browser hover <selector|@ref> [--snapshot <snapshot_id>]`
-- `human-browser screenshot [path] [--full] [--tab <active|tab_id>]`
+- `human-browser screenshot [selector] [path] [--full] [--tab <active|tab_id>]`
 - `human-browser pdf <path> [--tab <active|tab_id>]`
 - `human-browser eval <javascript> [--tab <active|tab_id>]`
 - `human-browser get text <selector|@ref> [--snapshot <snapshot_id>]`

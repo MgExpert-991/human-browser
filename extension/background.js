@@ -546,6 +546,41 @@ const HOVER_POINT_SCRIPT = `(input) => {
   };
 }`;
 
+const SCREENSHOT_CLIP_SCRIPT = `(input) => {
+  const el = document.querySelector(input.selector);
+  if (!el) {
+    return {
+      ok: false,
+      error: {
+        code: 'NO_MATCH',
+        message: 'Element not found for selector',
+        details: { selector: input.selector },
+      },
+    };
+  }
+
+  el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    return {
+      ok: false,
+      error: {
+        code: 'NOT_VISIBLE',
+        message: 'Element is not visible',
+        details: { selector: input.selector },
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}`;
+
 const TEXT_SCRIPT = `(input) => {
   const el = document.querySelector(input.selector);
   if (!el) {
@@ -1156,6 +1191,36 @@ async function runCommand(command, payload) {
       const options = {
         format: 'png',
       };
+
+      if (typeof payload.selector === 'string' && payload.selector.length > 0) {
+        const clip = await evaluateScript(tabId, SCREENSHOT_CLIP_SCRIPT, {
+          selector: payload.selector,
+        });
+        if (!clip?.ok) {
+          throw clip?.error || new Error('screenshot failed');
+        }
+        const capture = await chrome.debugger.sendCommand(
+          { tabId },
+          'Page.captureScreenshot',
+          {
+            ...options,
+            fromSurface: true,
+            captureBeyondViewport: true,
+            clip: {
+              x: Number(clip.x),
+              y: Number(clip.y),
+              width: Number(clip.width),
+              height: Number(clip.height),
+              scale: 1,
+            },
+          },
+        );
+        return {
+          ok: true,
+          format: 'png',
+          data_base64: capture.data,
+        };
+      }
 
       if (Boolean(payload.full_page)) {
         const metrics = await chrome.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics');

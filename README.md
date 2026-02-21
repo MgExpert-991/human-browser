@@ -42,6 +42,9 @@ human-browser status
 human-browser tabs
 human-browser snapshot
 human-browser snapshot --interactive --cursor --compact --depth 3 --selector '#app'
+human-browser diff snapshot
+human-browser diff screenshot --baseline before.png
+human-browser diff url https://staging.example.com https://prod.example.com --screenshot
 human-browser click '#login'
 human-browser fill '#email' hello@example.com
 human-browser open https://example.com

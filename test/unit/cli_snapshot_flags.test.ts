@@ -35,3 +35,16 @@ test('snapshot depth must be a non-negative integer', () => {
     (error: unknown) => error instanceof HBError && error.structured.code === 'BAD_REQUEST',
   );
 });
+
+test('snapshot short flags are translated into daemon args', () => {
+  const request = toDaemonRequest('snapshot', ['-i', '-C', '-c', '-d', '3', '-s', '#root']);
+  assert.equal(request.command, 'snapshot');
+  assert.deepEqual(request.args, {
+    target: undefined,
+    interactive: true,
+    cursor: true,
+    compact: true,
+    depth: 3,
+    selector: '#root',
+  });
+});

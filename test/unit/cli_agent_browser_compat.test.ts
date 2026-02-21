@@ -17,8 +17,20 @@ test('screenshot supports optional path and --full', () => {
   assert.equal(request.command, 'screenshot');
   assert.deepEqual(request.args, {
     path: 'output.png',
+    selector: undefined,
     full_page: true,
     tab_id: 'active',
+  });
+});
+
+test('screenshot supports selector and optional output path', () => {
+  const request = toDaemonRequest('screenshot', ['#hero', 'capture.png', '--full']);
+  assert.equal(request.command, 'screenshot');
+  assert.deepEqual(request.args, {
+    selector: '#hero',
+    path: 'capture.png',
+    full_page: true,
+    tab_id: undefined,
   });
 });
 

@@ -20,7 +20,9 @@
     "README.md"
   ],
   "dependencies": {
+    "jpeg-js": "^0.4.4",
     "jsdom": "^28.0.0",
+    "pngjs": "^7.0.0",
     "ws": "^8.19.0"
   },
   "bin": {

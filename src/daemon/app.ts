@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { URL } from 'node:url';
 import { HBError, asStructuredError } from '../shared/errors.ts';
 import { buildSnapshot } from '../shared/snapshot.ts';
+import { diffSnapshotText } from '../shared/snapshot-diff.ts';
+import { diffImages } from '../shared/image-diff.ts';
 import type {
   DaemonApiResponse,
   DaemonConfig,
@@ -43,6 +45,8 @@ interface RuntimeState {
   reconnectAttempts: number;
   selectedTabId?: number;
   latestSnapshot?: SnapshotData;
+  snapshotById: Map<string, SnapshotData>;
+  snapshotOrder: string[];
   pendingCommands: Map<string, PendingCommand>;
   connectionWaiters: ConnectionWaiter[];
   events: DaemonEvent[];
@@ -57,10 +61,14 @@ export interface StartedDaemon {
   getDiagnostics: (limit: number) => DiagnosticsReport;
 }
 
+const MAX_SNAPSHOT_HISTORY = 20;
+
 export async function startDaemon(config: DaemonConfig): Promise<StartedDaemon> {
   const state: RuntimeState = {
     config,
     reconnectAttempts: 0,
+    snapshotById: new Map(),
+    snapshotOrder: [],
     pendingCommands: new Map(),
     connectionWaiters: [],
     events: [],
@@ -422,27 +430,9 @@ async function executeCommand(
     case 'snapshot': {
       const target = args.target ?? state.selectedTabId ?? 'active';
       const snapshotOptions = getSnapshotOptions(args);
-      const result = await sendBridgeCommand(
-        state,
-        'snapshot',
-        {
-          target,
-          ...snapshotOptions,
-        },
-        options,
-      );
-      const tabId = Number(result.tab_id);
-      const nodes = result.nodes as SnapshotNode[] | undefined;
-
-      if (!Number.isFinite(tabId) || !Array.isArray(nodes)) {
-        throw new HBError('EXTENSION_ERROR', 'snapshot result is missing tab_id or nodes', {
-          result,
-        });
-      }
-
-      const snapshot = buildSnapshot(tabId, nodes);
-      state.latestSnapshot = snapshot;
-      state.selectedTabId = tabId;
+      const snapshot = await captureSnapshot(state, target, snapshotOptions, options);
+      rememberSnapshot(state, snapshot);
+      state.selectedTabId = snapshot.tab_id;
 
       return {
         snapshot_id: snapshot.snapshot_id,
@@ -451,6 +441,154 @@ async function executeCommand(
         refs: snapshot.refs,
         created_at: snapshot.created_at,
       };
+    }
+
+    case 'diff_snapshot': {
+      const baselinePath = typeof args.baseline === 'string' ? args.baseline : undefined;
+      const beforeRaw = baselinePath
+        ? await readBaselineSnapshotFile(baselinePath)
+        : state.latestSnapshot?.tree;
+
+      if (!beforeRaw) {
+        throw new HBError(
+          'BAD_REQUEST',
+          'No previous snapshot in this session. Take a snapshot first, or use --baseline <file>.',
+        );
+      }
+
+      const target = args.target ?? state.selectedTabId ?? 'active';
+      const snapshotOptions = getSnapshotOptions(args);
+      const currentSnapshot = await captureSnapshot(state, target, snapshotOptions, options);
+
+      return diffSnapshotText(beforeRaw, currentSnapshot.tree);
+    }
+
+    case 'diff_screenshot': {
+      const baselinePath = getStringField(args, 'baseline');
+      const baselineBuffer = await readBaselineImageFile(baselinePath);
+
+      const threshold = getOptionalThreshold(args.threshold);
+      const selector = typeof args.selector === 'string' ? args.selector : undefined;
+      const fullPage = Boolean(args.full_page);
+      const outputPathRaw = typeof args.output === 'string' ? args.output : undefined;
+
+      const tabId = resolveTabForAction(state, args);
+      const screenshotResult = await sendBridgeCommand(
+        state,
+        'screenshot',
+        {
+          tab_id: tabId,
+          selector,
+          full_page: fullPage,
+        },
+        options,
+      );
+      const currentRawData = screenshotResult.data_base64;
+      if (typeof currentRawData !== 'string' || currentRawData.length === 0) {
+        throw new HBError('EXTENSION_ERROR', 'screenshot result is missing data_base64', {
+          result: screenshotResult,
+        });
+      }
+
+      const outputPath = outputPathRaw ? resolveOutputPathWithExt(outputPathRaw, '.png') : undefined;
+      const ext = extname(baselinePath).toLowerCase();
+      const baselineMime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+      return diffImages(
+        baselineBuffer,
+        Buffer.from(currentRawData, 'base64'),
+        {
+          threshold,
+          outputPath,
+          baselineMime,
+        },
+      );
+    }
+
+    case 'diff_url': {
+      const url1 = getStringField(args, 'url1');
+      const url2 = getStringField(args, 'url2');
+      const screenshotEnabled = Boolean(args.screenshot);
+      const fullPage = Boolean(args.full_page);
+      const waitUntil = getWaitUntil(args.wait_until);
+      const snapshotOptions = getSnapshotOptions(args);
+      const tabId = resolveTabForAction(state, args);
+
+      await sendBridgeCommand(state, 'open', { tab_id: tabId, url: url1 }, options);
+      await sendBridgeCommand(
+        state,
+        'wait',
+        {
+          tab_id: tabId,
+          load_state: waitUntil,
+          timeout_ms: options.timeoutMs,
+        },
+        options,
+      );
+      const snapshot1 = await captureSnapshot(state, tabId, snapshotOptions, options);
+      let screenshot1: Buffer | undefined;
+      if (screenshotEnabled) {
+        const shot1 = await sendBridgeCommand(
+          state,
+          'screenshot',
+          {
+            tab_id: tabId,
+            full_page: fullPage,
+          },
+          options,
+        );
+        const data = shot1.data_base64;
+        if (typeof data !== 'string' || data.length === 0) {
+          throw new HBError('EXTENSION_ERROR', 'screenshot result is missing data_base64', {
+            result: shot1,
+          });
+        }
+        screenshot1 = Buffer.from(data, 'base64');
+      }
+
+      await sendBridgeCommand(state, 'open', { tab_id: tabId, url: url2 }, options);
+      await sendBridgeCommand(
+        state,
+        'wait',
+        {
+          tab_id: tabId,
+          load_state: waitUntil,
+          timeout_ms: options.timeoutMs,
+        },
+        options,
+      );
+      const snapshot2 = await captureSnapshot(state, tabId, snapshotOptions, options);
+      rememberSnapshot(state, snapshot2);
+      state.selectedTabId = snapshot2.tab_id;
+
+      const snapshotDiff = diffSnapshotText(snapshot1.tree, snapshot2.tree);
+      const response: Record<string, unknown> = {
+        snapshot: snapshotDiff,
+      };
+
+      if (screenshotEnabled && screenshot1) {
+        const shot2 = await sendBridgeCommand(
+          state,
+          'screenshot',
+          {
+            tab_id: tabId,
+            full_page: fullPage,
+          },
+          options,
+        );
+        const data = shot2.data_base64;
+        if (typeof data !== 'string' || data.length === 0) {
+          throw new HBError('EXTENSION_ERROR', 'screenshot result is missing data_base64', {
+            result: shot2,
+          });
+        }
+        response.screenshot = await diffImages(
+          screenshot1,
+          Buffer.from(data, 'base64'),
+          {},
+        );
+      }
+
+      return response;
     }
 
     case 'click': {
@@ -734,12 +872,14 @@ async function executeCommand(
     case 'screenshot': {
       const tabId = resolveTabForAction(state, args);
       const fullPage = Boolean(args.full_page);
+      const selector = typeof args.selector === 'string' ? args.selector : undefined;
       const result = await sendBridgeCommand(
         state,
         'screenshot',
         {
           tab_id: tabId,
           full_page: fullPage,
+          selector,
         },
         options,
       );
@@ -972,6 +1112,8 @@ async function executeCommand(
 
     case 'reset': {
       state.latestSnapshot = undefined;
+      state.snapshotById.clear();
+      state.snapshotOrder = [];
       const extensionOnline = Boolean(
         state.extensionSocket && state.extensionSocket.readyState === state.extensionSocket.OPEN,
       );
@@ -997,6 +1139,108 @@ async function executeCommand(
     default:
       throw new HBError('BAD_REQUEST', `Unknown command: ${command}`);
   }
+}
+
+async function captureSnapshot(
+  state: RuntimeState,
+  target: number | 'active',
+  snapshotOptions: SnapshotOptions,
+  options: { timeoutMs: number; queueMode: QueueMode },
+): Promise<SnapshotData> {
+  const result = await sendBridgeCommand(
+    state,
+    'snapshot',
+    {
+      target,
+      ...snapshotOptions,
+    },
+    options,
+  );
+  const tabId = Number(result.tab_id);
+  const nodes = result.nodes as SnapshotNode[] | undefined;
+
+  if (!Number.isFinite(tabId) || !Array.isArray(nodes)) {
+    throw new HBError('EXTENSION_ERROR', 'snapshot result is missing tab_id or nodes', {
+      result,
+    });
+  }
+
+  return buildSnapshot(tabId, nodes);
+}
+
+async function readBaselineSnapshotFile(path: string): Promise<string> {
+  let baseline: string;
+  try {
+    baseline = await readFile(path, 'utf8');
+  } catch {
+    throw new HBError('BAD_REQUEST', `Cannot read baseline file: ${path}`);
+  }
+
+  return normalizeSnapshotBaselineText(baseline);
+}
+
+function normalizeSnapshotBaselineText(raw: string): string {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  if (lines.length === 0) {
+    return '';
+  }
+  const firstLine = lines[0] ?? '';
+  if (/^snapshot_id=.* tab_id=.*$/.test(firstLine)) {
+    return lines.slice(1).join('\n');
+  }
+  return lines.join('\n');
+}
+
+async function readBaselineImageFile(path: string): Promise<Buffer> {
+  try {
+    return await readFile(path);
+  } catch {
+    throw new HBError('BAD_REQUEST', `Baseline file not found: ${path}`);
+  }
+}
+
+function getOptionalThreshold(raw: unknown): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > 1) {
+    throw new HBError('BAD_REQUEST', `Threshold must be between 0 and 1, got ${String(raw)}`);
+  }
+  return raw;
+}
+
+function getWaitUntil(raw: unknown): 'load' | 'domcontentloaded' | 'networkidle' {
+  if (raw === undefined) {
+    return 'load';
+  }
+  if (raw === 'load' || raw === 'domcontentloaded' || raw === 'networkidle') {
+    return raw;
+  }
+  throw new HBError(
+    'BAD_REQUEST',
+    `wait_until must be one of load|domcontentloaded|networkidle, got ${String(raw)}`,
+  );
+}
+
+function rememberSnapshot(state: RuntimeState, snapshot: SnapshotData): void {
+  state.latestSnapshot = snapshot;
+
+  if (state.snapshotById.has(snapshot.snapshot_id)) {
+    state.snapshotOrder = state.snapshotOrder.filter((id) => id !== snapshot.snapshot_id);
+  }
+
+  state.snapshotById.set(snapshot.snapshot_id, snapshot);
+  state.snapshotOrder.push(snapshot.snapshot_id);
+
+  if (state.snapshotOrder.length <= MAX_SNAPSHOT_HISTORY) {
+    return;
+  }
+
+  const removedSnapshotId = state.snapshotOrder.shift();
+  if (!removedSnapshotId) {
+    return;
+  }
+  state.snapshotById.delete(removedSnapshotId);
 }
 
 function resolveSnapshotForAction(state: RuntimeState, args: Record<string, unknown>): SnapshotData {

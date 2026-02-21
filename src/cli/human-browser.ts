@@ -345,6 +345,9 @@ export function toDaemonRequest(
     case 'reset': {
       return { command, args: {} };
     }
+    case 'diff': {
+      return parseDiffArgs(args);
+    }
     case 'use': {
       const target = args[0];
       if (!target) {
@@ -428,14 +431,16 @@ export function toDaemonRequest(
         },
       };
     }
-    case 'keypress': {
+    case 'keypress':
+    case 'press':
+    case 'key': {
       const key = args[0];
       if (!key) {
-        throw new HBError('BAD_REQUEST', 'keypress requires <key>');
+        throw new HBError('BAD_REQUEST', `${command} requires <key>`);
       }
       const parsed = parseNamedFlags(args.slice(1), ['--tab']);
       return {
-        command,
+        command: 'keypress',
         args: {
           key,
           tab_id: parsed['--tab'] === undefined ? undefined : parseTab(parsed['--tab']),
@@ -531,14 +536,14 @@ export function toDaemonRequest(
       };
     }
     case 'screenshot': {
-      const { path, rest } = parseOptionalPathArg(args);
-      const parsed = parseMixedFlags(rest, ['--tab'], ['--full']);
+      const parsed = parseScreenshotArgs(args);
       return {
         command,
         args: {
-          path,
-          full_page: parsed.booleans.has('--full'),
-          tab_id: parsed.values['--tab'] === undefined ? undefined : parseTab(parsed.values['--tab']),
+          path: parsed.path,
+          selector: parsed.selector,
+          full_page: parsed.full_page,
+          tab_id: parsed.tab_id,
         },
       };
     }
@@ -746,17 +751,90 @@ function parseNamedFlagsAllowBooleans(
   return map;
 }
 
-function parseOptionalPathArg(args: string[]): { path?: string; rest: string[] } {
-  if (args.length === 0) {
-    return { rest: [] };
+function parseScreenshotArgs(args: string[]): {
+  selector?: string;
+  path?: string;
+  full_page: boolean;
+  tab_id?: number | 'active';
+} {
+  const positional: string[] = [];
+  let fullPage = false;
+  let tabId: number | 'active' | undefined;
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === '--full' || token === '-f') {
+      fullPage = true;
+      continue;
+    }
+    if (token === '--tab') {
+      const value = args[i + 1];
+      if (!value || value.startsWith('-')) {
+        throw new HBError('BAD_REQUEST', 'Flag requires a value: --tab');
+      }
+      tabId = parseTab(value);
+      i += 1;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      throw new HBError('BAD_REQUEST', `Unknown flag: ${token}`);
+    }
+    positional.push(token);
   }
-  if (args[0]?.startsWith('--')) {
-    return { rest: args };
+
+  if (positional.length > 2) {
+    throw new HBError('BAD_REQUEST', 'screenshot accepts at most two positional arguments: [selector] [path]');
   }
+
+  let selector: string | undefined;
+  let path: string | undefined;
+
+  if (positional.length === 2) {
+    selector = positional[0];
+    path = positional[1];
+  } else if (positional.length === 1) {
+    const value = positional[0] as string;
+    if (isLikelySelector(value) && !isLikelyPath(value)) {
+      selector = value;
+    } else if (isLikelyPath(value)) {
+      path = value;
+    } else {
+      selector = value;
+    }
+  }
+
   return {
-    path: args[0],
-    rest: args.slice(1),
+    selector,
+    path,
+    full_page: fullPage,
+    tab_id: tabId,
   };
+}
+
+function isLikelySelector(value: string): boolean {
+  if (parseRefArg(value)) {
+    return true;
+  }
+  if (value.startsWith('#') || value.startsWith('.') || value.startsWith('[')) {
+    return true;
+  }
+  if (value.startsWith('text=') || value.startsWith('xpath=')) {
+    return true;
+  }
+  return false;
+}
+
+function isLikelyPath(value: string): boolean {
+  if (value.startsWith('./') || value.startsWith('../') || value.startsWith('/') || value.startsWith('~/')) {
+    return true;
+  }
+  if (value.includes('/')) {
+    return true;
+  }
+  if (/\.(png|jpg|jpeg|webp)$/i.test(value)) {
+    return true;
+  }
+  return false;
 }
 
 function parseWaitArgs(args: string[]): Record<string, unknown> {
@@ -988,24 +1066,24 @@ function parseSnapshotArgs(args: string[]): { target?: number | 'active'; option
   for (let i = 0; i < args.length; i += 1) {
     const token = args[i];
 
-    if (token === '--interactive') {
+    if (token === '--interactive' || token === '-i') {
       options.interactive = true;
       continue;
     }
 
-    if (token === '--cursor') {
+    if (token === '--cursor' || token === '-C') {
       options.cursor = true;
       continue;
     }
 
-    if (token === '--compact') {
+    if (token === '--compact' || token === '-c') {
       options.compact = true;
       continue;
     }
 
     if (token === '--tab') {
       const value = args[i + 1];
-      if (value === undefined || value.startsWith('--')) {
+      if (value === undefined || value.startsWith('-')) {
         throw new HBError('BAD_REQUEST', 'Flag requires a value: --tab');
       }
       target = parseTab(value);
@@ -1013,10 +1091,10 @@ function parseSnapshotArgs(args: string[]): { target?: number | 'active'; option
       continue;
     }
 
-    if (token === '--depth') {
+    if (token === '--depth' || token === '-d') {
       const value = args[i + 1];
-      if (value === undefined || value.startsWith('--')) {
-        throw new HBError('BAD_REQUEST', 'Flag requires a value: --depth');
+      if (value === undefined || value.startsWith('-')) {
+        throw new HBError('BAD_REQUEST', `Flag requires a value: ${token}`);
       }
       const depth = Number(value);
       if (!Number.isInteger(depth) || depth < 0) {
@@ -1027,10 +1105,10 @@ function parseSnapshotArgs(args: string[]): { target?: number | 'active'; option
       continue;
     }
 
-    if (token === '--selector') {
+    if (token === '--selector' || token === '-s') {
       const value = args[i + 1];
-      if (value === undefined || value.startsWith('--')) {
-        throw new HBError('BAD_REQUEST', 'Flag requires a value: --selector');
+      if (value === undefined || value.startsWith('-')) {
+        throw new HBError('BAD_REQUEST', `Flag requires a value: ${token}`);
       }
       options.selector = value;
       i += 1;
@@ -1041,6 +1119,189 @@ function parseSnapshotArgs(args: string[]): { target?: number | 'active'; option
   }
 
   return { target, options };
+}
+
+function parseDiffArgs(args: string[]): { command: string; args: Record<string, unknown> } {
+  const sub = args[0];
+  if (!sub) {
+    throw new HBError('BAD_REQUEST', 'diff requires <snapshot|screenshot|url>');
+  }
+
+  if (sub === 'snapshot') {
+    const payload: Record<string, unknown> = {};
+    for (let i = 1; i < args.length; i += 1) {
+      const token = args[i];
+      if (token === '-b' || token === '--baseline') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff snapshot --baseline requires <file>');
+        }
+        payload.baseline = value;
+        i += 1;
+        continue;
+      }
+      if (token === '-s' || token === '--selector') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff snapshot --selector requires <sel>');
+        }
+        payload.selector = value;
+        i += 1;
+        continue;
+      }
+      if (token === '-c' || token === '--compact') {
+        payload.compact = true;
+        continue;
+      }
+      if (token === '-d' || token === '--depth') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff snapshot --depth requires <n>');
+        }
+        const depth = Number(value);
+        if (!Number.isInteger(depth) || depth < 0) {
+          throw new HBError('BAD_REQUEST', `Depth must be a non-negative integer, got: ${value}`);
+        }
+        payload.depth = depth;
+        i += 1;
+        continue;
+      }
+      throw new HBError('BAD_REQUEST', `Unknown flag for diff snapshot: ${token}`);
+    }
+    return {
+      command: 'diff_snapshot',
+      args: payload,
+    };
+  }
+
+  if (sub === 'screenshot') {
+    const payload: Record<string, unknown> = {};
+    for (let i = 1; i < args.length; i += 1) {
+      const token = args[i];
+      if (token === '-b' || token === '--baseline') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff screenshot --baseline requires <file>');
+        }
+        payload.baseline = value;
+        i += 1;
+        continue;
+      }
+      if (token === '-o' || token === '--output') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff screenshot --output requires <file>');
+        }
+        payload.output = value;
+        i += 1;
+        continue;
+      }
+      if (token === '-t' || token === '--threshold') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff screenshot --threshold requires <0-1>');
+        }
+        const threshold = Number(value);
+        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+          throw new HBError('BAD_REQUEST', `Threshold must be between 0 and 1, got ${value}`);
+        }
+        payload.threshold = threshold;
+        i += 1;
+        continue;
+      }
+      if (token === '-s' || token === '--selector') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff screenshot --selector requires <sel>');
+        }
+        payload.selector = value;
+        i += 1;
+        continue;
+      }
+      if (token === '--full' || token === '-f') {
+        payload.full_page = true;
+        continue;
+      }
+      throw new HBError('BAD_REQUEST', `Unknown flag for diff screenshot: ${token}`);
+    }
+    if (typeof payload.baseline !== 'string') {
+      throw new HBError('BAD_REQUEST', 'diff screenshot requires --baseline <file>');
+    }
+    return {
+      command: 'diff_screenshot',
+      args: payload,
+    };
+  }
+
+  if (sub === 'url') {
+    const url1 = args[1];
+    const url2 = args[2];
+    if (!url1 || !url2) {
+      throw new HBError('BAD_REQUEST', 'diff url requires <url1> <url2>');
+    }
+    const payload: Record<string, unknown> = {
+      url1,
+      url2,
+    };
+
+    for (let i = 3; i < args.length; i += 1) {
+      const token = args[i];
+      if (token === '--screenshot') {
+        payload.screenshot = true;
+        continue;
+      }
+      if (token === '--full' || token === '-f') {
+        payload.full_page = true;
+        continue;
+      }
+      if (token === '--wait-until') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff url --wait-until requires <load|domcontentloaded|networkidle>');
+        }
+        if (!['load', 'domcontentloaded', 'networkidle'].includes(value)) {
+          throw new HBError('BAD_REQUEST', `Invalid wait-until value: ${value}`);
+        }
+        payload.wait_until = value;
+        i += 1;
+        continue;
+      }
+      if (token === '-s' || token === '--selector') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff url --selector requires <sel>');
+        }
+        payload.selector = value;
+        i += 1;
+        continue;
+      }
+      if (token === '-c' || token === '--compact') {
+        payload.compact = true;
+        continue;
+      }
+      if (token === '-d' || token === '--depth') {
+        const value = args[i + 1];
+        if (!value || value.startsWith('-')) {
+          throw new HBError('BAD_REQUEST', 'diff url --depth requires <n>');
+        }
+        const depth = Number(value);
+        if (!Number.isInteger(depth) || depth < 0) {
+          throw new HBError('BAD_REQUEST', `Depth must be a non-negative integer, got: ${value}`);
+        }
+        payload.depth = depth;
+        i += 1;
+        continue;
+      }
+      throw new HBError('BAD_REQUEST', `Unknown flag for diff url: ${token}`);
+    }
+
+    return {
+      command: 'diff_url',
+      args: payload,
+    };
+  }
+
+  throw new HBError('BAD_REQUEST', `Unknown diff subcommand: ${sub}`);
 }
 
 function parseTab(raw: string): number | 'active' {
@@ -1128,6 +1389,7 @@ function renderText(command: string, data: Record<string, unknown>): void {
       process.stdout.write(`${String(data.tree)}\n`);
       return;
     }
+    case 'diff':
     case 'status':
     case 'diagnose': {
       process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
@@ -1154,18 +1416,21 @@ function printHelp(): void {
       '  daemon',
       '  status',
       '  tabs',
+      '  diff snapshot [--baseline <file>] [--selector <sel>] [--compact] [--depth <n>]',
+      '  diff screenshot --baseline <file> [--output <file>] [--threshold <0-1>] [--selector <sel>] [--full]',
+      '  diff url <url1> <url2> [--screenshot] [--full] [--wait-until <load|domcontentloaded|networkidle>] [--selector <sel>] [--compact] [--depth <n>]',
       '  use <active|tab_id>',
-      '  snapshot [--tab <active|tab_id>] [--interactive] [--cursor] [--compact] [--depth <N>] [--selector <css>]',
+      '  snapshot [--tab <active|tab_id>] [-i|--interactive] [-C|--cursor] [-c|--compact] [-d|--depth <N>] [-s|--selector <css>]',
       '  click <selector|@ref> [--snapshot <snapshot_id>]',
       '  fill <selector|@ref> <value> [--snapshot <snapshot_id>]',
       '    (for <input type="file">, <value> is treated as a local file path)',
-      '  keypress <key> [--tab <active|tab_id>]',
+      '  keypress|press|key <key> [--tab <active|tab_id>]',
       '  scroll <x> <y> [--tab <active|tab_id>]',
       '  navigate <url> [--tab <active|tab_id>]',
       '  open <url> [--tab <active|tab_id>]',
       '  close [--tab <active|tab_id>]',
       '  hover <selector|@ref> [--snapshot <snapshot_id>]',
-      '  screenshot [path] [--full] [--tab <active|tab_id>]',
+      '  screenshot [selector] [path] [--full] [--tab <active|tab_id>]',
       '  pdf <path> [--tab <active|tab_id>]',
       '  eval <javascript> [--tab <active|tab_id>]',
       '  get text <selector|@ref> [--snapshot <snapshot_id>]',
